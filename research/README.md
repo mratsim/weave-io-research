@@ -13,9 +13,30 @@ This collects research on continuation-passing style, async/await, coroutines
 - Downloading a billion files with Python: https://ep2019.europython.eu/media/conference/slides/KNhQYeQ-downloading-a-billion-files-in-python.pdf
 - Efficient IO with io_uring: http://kernel.dk/io_uring.pdf
 
+## Nim RFCs
+
+- next steps for CPS: https://github.com/nim-lang/RFCs/issues/295
+- completing the async/await implementation: https://github.com/nim-lang/RFCs/issues/304
+- async I/O with structural control flow (a.k.a Enforced awaits): https://github.com/status-im/nim-chronos/issues/2
+
 ## Case studies
 
 - Downloading a billion files with Python: https://ep2019.europython.eu/media/conference/slides/KNhQYeQ-downloading-a-billion-files-in-python.pdf
+
+### Structured concurrency / avoid eager execution
+
+C++ Unified Executor proposals
+- CppCon2019 talk: https://youtu.be/tF-Nz4aRWAM
+- In particular "Would iterators be successful if they all allocate, require synchronization and do type-erasure, removing optimization opportunities from the compiler" at https://youtu.be/tF-Nz4aRWAM?t=1037
+  - Instead use lazy future that start suspended and continuations/types are attached to it:
+  - https://github.com/CppCon/CppCon2019/blob/master/Presentations/a_unifying_abstraction_for_async_in_cpp/a_unifying_abstraction_for_async_in_cpp__eric_niebler_david_s_hollman__cppcon_2019.pdf
+- https://github.com/facebookexperimental/libunifex
+- http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2020/p0443r12.html
+
+Python Trio
+- https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/
+
+_Note from experience in eager execution vs delayed execution of compute graph in Machine Learning (which are similar to async task graphs), people found eager execution (Pytorch) significantly easier to reason about than lazy (Tensorflow)_
 
 ## Languages write up
 
@@ -73,6 +94,10 @@ _Caveat: As Windows IOCP and Linux io_uring require being passed an owned buffer
 -  https://gist.github.com/Matthias247/ffc0f189742abf6aa41a226fe07398a8
 
 In particular it distinguishes between the traditional completion-based and their own poll-based futures with completion-based requiring a buffer for each future and so requiring more memory allocation (which are problematic because it stresses the GC, and lead to memory fragmentation on long running application). In particular the poll approach is attractive because it eases cancellation (don't poll) and since there is no heap indirection for the future, the compiler can do deep optimizations.
+
+### Rust-style futures in C
+
+- https://axelforsman.tk/2020/08/24/rust-style-futures-in-c.html
 
 ### Swift Async proposal
 
@@ -132,3 +157,68 @@ Swift would build async/await on top of coroutines abstraction
 - Compiling with continuations: https://www.microsoft.com/en-us/research/publication/compiling-with-continuations-continued/
 - How to compile with continuations: http://matt.might.net/articles/cps-conversion/
 - Compiling with continuations, or without Whatever: https://www.cs.purdue.edu/homes/rompf/papers/cong-icfp19.pdf
+
+## Type Erasure
+
+A scheduler will likely need to enqueue continuations/frames/tasks in a data structure.
+For that it will need to be type-erasedat 2 level, the tasks and the environment.
+Tpe erasing the task is easy as it is always used by pointer. However the environment as dynmic size.
+
+Some solutions:
+- Make the environment another untyped pointer. This implies heap allocation of the task and heap allocation of the environment, which will be very costly when a scheduler deals with billions of them.
+- Like Weave, make the environment intrusive but choose a max size. A decent max size can be chosen (144 bytes which leaves 112 bytes of scheduler metadata). This helps using Tasks on a memory pool. AFAIk actor languages like Erlang have a similar restriction.
+- Understand what's going on here: https://github.com/CppCon/CppCon2019/blob/master/Presentations/back_to_basics_type_erasure/back_to_basics_type_erasure__arthur_odwyer__cppcon_2019.pdf
+
+## Function colors
+
+Function coloring problem might be exagerated.
+`waitFor` solves crossing the async->sync barrier.
+And an equivalent construct is needed for sync->async especially:
+- to handle blocking file operations on Linux
+- to "asyncify" channels/flowvers used to communicate in a multithreaded program.
+
+### Async function color
+
+- http://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
+- https://elizarov.medium.com/how-do-you-color-your-functions-a6bb423d936d
+
+### {.sideeffect.}, IO Monad, Tainted string, Result, error code are all colored
+
+- https://wiki.haskell.org/Introduction_to_IO
+
+Nim {.sideeffect.} are also API infectious, which is usually OK except when we want to introduce logs in a previously side-effect free function.
+
+However in the case of {.sideeffect.}, Result, error codes or {.raises: [].}, the viral nature is actually wanted, just like having proper parameter types as this ensures program correctness.
+
+### Fork/Join parallelism color
+
+In most modern implementations fork/join parallel runtime are reentrant, a caller isn't "infected" by the internals of the called function, parallelism is black-boxed.
+However, Cilk, the foundational implementation of fork/join parallelism, that also proved how to schedule optimally on multicore is colored. http://supertech.csail.mit.edu/papers/PPoPP95.pdf
+At a spawn point, the current execution is separated into a child call and a continuation:
+```C
+int fib(int n)
+{
+    if (n < 2)
+        return n;
+    int x = cilk_spawn fib(n-1);
+    int y = fib(n-2);
+    cilk_sync;
+    return x + y;
+}
+```
+At this point, the current thread can either:
+- execute the child call (work-first) and another thread can swoop in and steal the continuation (continuation-stealing). This is Cilk mode of operation.
+- execute the continuation (help-first) and another thread can swoop in and steal the child (child-stealing). This is most other framework mode of operations.
+
+The main difference is that continuation stealing require saving the stack frame of the current function or it can't be resumed from an arbitrary thread. And another consequence is that function including cilk_spawn have a different calling convention than C since they are resumable. This means that Cilk program cannot naively be called from C. The workaround Cilk developers used is to always compile 2 versions of a program, one with the Cilk resumable calling convention and one with the C calling convention.
+
+A side note: continuation stealing ensures that on a single-thread order of execution of the program is the same as it's serial equivalent. Also child stealing suffers from unbounded suspended tasks spawned since they are only worked on late. It's an excellent way to DOS GCC OpenMP implementation.
+
+## Schedulers
+
+It is interesting to have both global schedulers and scoped schedulers.
+
+Global schedulers have significantly more optimization opportunities.
+This is the reason why Microsoft forces everyone to use Windows Fibers for multithreading and Apple forces everyone to use Grand Central Dispatch.
+On the other hand, developers might want local scheduler either to control their priority/niceness
+or ensure reentrancy if used as a library.
