@@ -4,6 +4,14 @@ This collects research on continuation-passing style, async/await, coroutines
 
 ## Included in repo
 
+- Continuation Passing for C:
+  - https://github.com/kerneis/cpc
+  - Chroboczek, A space-efficient implementation of concurrency: https://www.irif.fr/~jch//cpc.pdf
+  - Kerneis PhD Thesis: https://tel.archives-ouvertes.fr/tel-00751444/document
+  - Continuation-Passing C Compiling threads to events through continuations, https://www.irif.fr/~jch/research/cpc-2012.pdf
+  - Discussion: http://lambda-the-ultimate.org/node/4157
+  - Manual: https://github.com/kerneis/cpc/tree/develop/doc
+
 - Kotlin coroutines: https://github.com/Kotlin/KEEP/blob/31bb8af/proposals/coroutines.md
 - Rust async/await interface challenge - Matthias247: https://gist.github.com/Matthias247/5e5e7430149bbb04eebf18cf31747fe0
 - Rust async/await cancellation challenge - Matthias247: https://gist.github.com/Matthias247/ffc0f189742abf6aa41a226fe07398a8
@@ -222,3 +230,9 @@ Global schedulers have significantly more optimization opportunities.
 This is the reason why Microsoft forces everyone to use Windows Fibers for multithreading and Apple forces everyone to use Grand Central Dispatch.
 On the other hand, developers might want local scheduler either to control their priority/niceness
 or ensure reentrancy if used as a library.
+
+### Scheduler research
+
+- Cappriccio: http://capriccio.cs.berkeley.edu/pubs/capriccio-sosp-2003.pdf
+- Making Tokio 10x faster: https://tokio.rs/blog/2019-10-scheduler
+- FairThread switchable schedulers: http://www-sop.inria.fr/mimosa/rp/FairThreads/FTC/documentation/ft.pdf
