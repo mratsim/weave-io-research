@@ -44,7 +44,9 @@ C++ Unified Executor proposals
 Python Trio
 - https://vorpus.org/blog/notes-on-structured-concurrency-or-go-statement-considered-harmful/
 
-_Note from experience in eager execution vs delayed execution of compute graph in Machine Learning (which are similar to async task graphs), people found eager execution (Pytorch) significantly easier to reason about than lazy (Tensorflow)_
+_Note from experience in eager execution vs delayed execution of compute graph in Machine Learning (which are similar to async task graphs), people found eager execution (Pytorch) significantly easier to reason about than lazy (Tensorflow)._
+
+_Note 2: Rust seems to have come to the same conclusion. Rust features are delayed until they are polled_
 
 ## Languages write up
 
@@ -86,6 +88,8 @@ Note: OCaml optimizes chain of Deferred in tail call (i.e. async tail call optim
   - https://doc.pypy.org/en/latest/stackless.html
   - Continulet: https://doc.pypy.org/en/latest/stackless.html#continulet
   - Composability of continulet vs switchable coroutines: https://doc.pypy.org/en/latest/stackless.html#theory-of-composability
+  - https://www.grant-olson.net/files/why_stackless.html
+  - http://dalkescientific.com/StacklessPyCon2007-Dalke.pdf
 
 - Fibers: https://github.com/saghul/python-fibers
   - https://www.slideshare.net/saghul/understanding-greenlet
@@ -102,6 +106,15 @@ _Caveat: As Windows IOCP and Linux io_uring require being passed an owned buffer
 -  https://gist.github.com/Matthias247/ffc0f189742abf6aa41a226fe07398a8
 
 In particular it distinguishes between the traditional completion-based and their own poll-based futures with completion-based requiring a buffer for each future and so requiring more memory allocation (which are problematic because it stresses the GC, and lead to memory fragmentation on long running application). In particular the poll approach is attractive because it eases cancellation (don't poll) and since there is no heap indirection for the future, the compiler can do deep optimizations.
+
+### Rust RFCs
+
+- (merged) Futures: https://github.com/rust-lang/rfcs/blob/master/text/2592-futures.md
+- (merged) Async/await: https://github.com/rust-lang/rfcs/blob/master/text/2394-async_await.md
+
+- (open) Stackless coroutines: https://github.com/rust-lang/rfcs/pull/1823
+
+Note: stackless in Rust means on the stack while stackless in Python means on the heap (don't use stack) ¯\\_(ツ)_/¯
 
 ### Rust-style futures in C
 
@@ -236,3 +249,24 @@ or ensure reentrancy if used as a library.
 - Cappriccio: http://capriccio.cs.berkeley.edu/pubs/capriccio-sosp-2003.pdf
 - Making Tokio 10x faster: https://tokio.rs/blog/2019-10-scheduler
 - FairThread switchable schedulers: http://www-sop.inria.fr/mimosa/rp/FairThreads/FTC/documentation/ft.pdf
+
+## Async I/O frameworks
+
+- C++ Elle by Docker: https://github.com/infinit/elle
+  - elle: Utilities including serialization, logs, buffer, formatting, ...
+  - reactor: An asynchronous framework using a coroutines scheduler
+  - cryptography: Object-oriented cryptography wrapper around OpenSSL
+  - protocol: Network communication designed to support RPCs
+  - das: Symbol-based introspection
+  - athena: Byzantine environment algorithms (Paxos)
+  - service/aws: reactorified AWS API wrapper
+  - service/dropbox: reactorified Dropbox API wrapper
+  - nbd: A Network Block Device implementation.
+
+- C++ Mordor by Mozy: https://github.com/mozy/mordor
+  - Streams
+  - HTTP server and clients
+  - logging, configuration, statistics gathering, and exceptions.
+  - unit test
+
+- Rust async-std: https://github.com/async-rs/async-std
