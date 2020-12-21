@@ -63,10 +63,16 @@ _Note 2: Rust seems to have come to the same conclusion. Rust features are delay
 
 ## Languages write up
 
-## Continuations in C
+### Continuations in C
 
 - Continuations in C: https://web.archive.org/web/20100106212446/http://homepage.mac.com/sigfpe/Computing/continuations.html
 - Continuations in Cee: https://wiki.c2.com/?ContinuationsInCee
+
+## C# Async/Await
+
+- C# Async/Await compilation in state machine:\
+  https://weblogs.asp.net/dixin/understanding-c-sharp-async-await-1-compilation
+- https://www.codeproject.com/Articles/535635/Async-Await-and-the-Generated-StateMachine
 
 ### Concurrent ML and Guile
 
@@ -90,6 +96,9 @@ Talks:
 - Concurrency doesn't have to be hard: Kotlin Coroutines and Channels by Jag Saund\
   https://www.youtube.com/watch?v=3WGM-_MnPQA \
   Excellent example with concurrent baristas a single coffee machine and a waiter taking orders
+
+- How Kotlin compiles CPS and coroutines to state machines:\
+  https://labs.pedrofelix.org/guides/kotlin/coroutines/coroutines-and-state-machines
 
 ### Lua coroutines
 
