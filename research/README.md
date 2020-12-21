@@ -11,7 +11,13 @@ of Javascript developers have to learn that stuff:
 Alternatively this post in the Python mailing list from 1999 is also a good explainer:
 - https://mail.python.org/pipermail/python-dev/1999-July/000467.html
 
+Layman's explanation of delimited continuations with examples of using them for exception handling and nondeterministic programming.
+- https://gist.github.com/sebfisch/2235780
+
 ## Included in repo
+
+- General: Layman's explanation of delimited continuations
+  - https://gist.github.com/sebfisch/2235780
 
 - Continuation Passing for C:
   - https://github.com/kerneis/cpc
@@ -99,6 +105,8 @@ Talks:
 
 - How Kotlin compiles CPS and coroutines to state machines:\
   https://labs.pedrofelix.org/guides/kotlin/coroutines/coroutines-and-state-machines
+- https://jorgecastillo.dev/digging-into-kotlin-continuations
+- https://proandroiddev.com/how-do-coroutines-work-under-the-hood-803e6e9da8bb
 
 ### Lua coroutines
 
