@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en-AU"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>C++ Coroutines: Understanding operator co_await | Asymmetric Transfer</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="C++ Coroutines: Understanding operator co_await" />
+<meta name="author" content="Lewis Baker" />
+<meta property="og:locale" content="en_AU" />
+<meta name="description" content="Understanding how the co_await operator works can help to demystify the behaviour of coroutines and how they are suspended and resumed. In this post I will be explaining the mechanics of the co_await operator and introduce the related ‘Awaitable’ and ‘Awaiter’ type concepts." />
+<meta property="og:description" content="Understanding how the co_await operator works can help to demystify the behaviour of coroutines and how they are suspended and resumed. In this post I will be explaining the mechanics of the co_await operator and introduce the related ‘Awaitable’ and ‘Awaiter’ type concepts." />
+<link rel="canonical" href="https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await" />
+<meta property="og:url" content="https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await" />
+<meta property="og:site_name" content="Asymmetric Transfer" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2017-11-17T00:00:00+00:00" />
+<script type="application/ld+json">
+{"mainEntityOfPage":{"@type":"WebPage","@id":"https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await"},"@type":"BlogPosting","url":"https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await","author":{"@type":"Person","name":"Lewis Baker"},"headline":"C++ Coroutines: Understanding operator co_await","dateModified":"2017-11-17T00:00:00+00:00","datePublished":"2017-11-17T00:00:00+00:00","description":"Understanding how the co_await operator works can help to demystify the behaviour of coroutines and how they are suspended and resumed. In this post I will be explaining the mechanics of the co_await operator and introduce the related ‘Awaitable’ and ‘Awaiter’ type concepts.","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="https://lewissbaker.github.io/feed.xml" title="Asymmetric Transfer" /><script>
+if(!(window.doNotTrack === "1" || navigator.doNotTrack === "1" || navigator.doNotTrack === "yes" || navigator.msDoNotTrack === "1")) {
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-107310540-1', 'auto');
+  ga('send', 'pageview');
+}
+</script>
+  
+</head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Asymmetric Transfer</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title" itemprop="name headline">C++ Coroutines: Understanding operator co_await</h1>
+    <p class="post-meta">
+      <time datetime="2017-11-17T00:00:00+00:00" itemprop="datePublished">
+        
+        Nov 17, 2017
+      </time>
+      </p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>In the previous post on <a href="https://lewissbaker.github.io/2017/09/25/coroutine-theory">Coroutine Theory</a>
+I described the high-level differences between functions and coroutines but without
+going into any detail on syntax and semantics of coroutines as described by the
+C++ Coroutines TS (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4680.pdf">N4680</a>).</p>
+
+<p>The key new facility that the Coroutines TS adds to the C++ language is the ability to
+suspend a coroutine, allowing it to be later resumed. The mechanism the TS provides for
+doing this is via the new <code class="language-plaintext highlighter-rouge">co_await</code> operator.</p>
+
+<p>Understanding how the <code class="language-plaintext highlighter-rouge">co_await</code> operator works can help to demystify the behaviour of
+coroutines and how they are suspended and resumed. In this post I will be explaining
+the mechanics of the <code class="language-plaintext highlighter-rouge">co_await</code> operator and introduce the related <strong>Awaitable</strong> and
+<strong>Awaiter</strong> type concepts.</p>
+
+<p>But before I dive into <code class="language-plaintext highlighter-rouge">co_await</code> I want to give a brief overview of the Coroutines TS
+to provide some context.</p>
+
+<h2 id="what-does-the-coroutines-ts-give-us">What does the Coroutines TS give us?</h2>
+
+<ul>
+  <li>Three new language keywords: <code class="language-plaintext highlighter-rouge">co_await</code>, <code class="language-plaintext highlighter-rouge">co_yield</code> and <code class="language-plaintext highlighter-rouge">co_return</code></li>
+  <li>Several new types in the <code class="language-plaintext highlighter-rouge">std::experimental</code> namespace:
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">coroutine_handle&lt;P&gt;</code></li>
+      <li><code class="language-plaintext highlighter-rouge">coroutine_traits&lt;Ts...&gt;</code></li>
+      <li><code class="language-plaintext highlighter-rouge">suspend_always</code></li>
+      <li><code class="language-plaintext highlighter-rouge">suspend_never</code></li>
+    </ul>
+  </li>
+  <li>A general mechanism that library writers can use to interact with coroutines
+and customise their behaviour.</li>
+  <li>A language facility that makes writing asynchronous code a whole lot easier!</li>
+</ul>
+
+<p>The facilities the C++ Coroutines TS provides in the language can be thought of
+as a <em>low-level assembly-language</em> for coroutines. These facilities can be difficult to use
+directly in a safe way and are mainly intended to be used by library-writers to build
+higher-level abstractions that application developers can work with safely.</p>
+
+<p>The plan is to deliver these new low-level facilities into an upcoming language standard
+(hopefully C++20) along with some accompanying higher-level types in the standard library
+that wrap these low-level building-blocks and make coroutines more accessible in a safe way
+for application developers.</p>
+
+<h2 id="compiler---library-interaction">Compiler &lt;-&gt; Library interaction</h2>
+
+<p>Interestingly, the Coroutines TS does not actually define the semantics of a coroutine.
+It does not define how to produce the value returned to the caller. It does not define
+what to do with the return value passed to the <code class="language-plaintext highlighter-rouge">co_return</code> statement or how to handle
+an exception that propagates out of the coroutine. It does not define what thread the
+coroutine should be resumed on.</p>
+
+<p>Instead, it specifies a general mechanism for library code to customise the behaviour
+of the coroutine by implementing types that conform to a specific interface. The compiler
+then generates code that calls methods on instances of types provided by the library.
+This approach is similar to the way that a library-writer can customise the behaviour
+of a range-based for-loop by defining the <code class="language-plaintext highlighter-rouge">begin()</code>/<code class="language-plaintext highlighter-rouge">end()</code> methods and an <code class="language-plaintext highlighter-rouge">iterator</code> type.</p>
+
+<p>The fact that the Coroutines TS doesn’t prescribe any particular semantics to
+the mechanics of a coroutine makes it a powerful tool. It allows library writers to define
+many different kinds of coroutines, for all sorts of different purposes.</p>
+
+<p>For example, you can define a coroutine that produces a single value asynchronously,
+or a coroutine that produces a sequence of values lazily, or a coroutine that simplifies
+control-flow for consuming <code class="language-plaintext highlighter-rouge">optional&lt;T&gt;</code> values by early-exiting if a <code class="language-plaintext highlighter-rouge">nullopt</code> value
+is encountered.</p>
+
+<p>There are two kinds of interfaces that are defined by the coroutines TS:
+The <strong>Promise</strong> interface and the <strong>Awaitable</strong> interface.</p>
+
+<p>The <strong>Promise</strong> interface specifies methods for customising the behaviour of the coroutine itself.
+The library-writer is able to customise what happens when the coroutine is called, what
+happens when the coroutine returns (either by normal means or via an unhandled exception)
+and customise the behaviour of any <code class="language-plaintext highlighter-rouge">co_await</code> or <code class="language-plaintext highlighter-rouge">co_yield</code> expression within the coroutine.</p>
+
+<p>The <strong>Awaitable</strong> interface specifies methods that control the semantics of a <code class="language-plaintext highlighter-rouge">co_await</code>
+expression. When a value is <code class="language-plaintext highlighter-rouge">co_await</code>ed, the code is translated into a series of calls
+to methods on the awaitable object that allow it to specify: whether to suspend the current
+coroutine, execute some logic after it has suspended to schedule the coroutine
+for later resumption, and execute some logic after the coroutine resumes to produce the
+result of the <code class="language-plaintext highlighter-rouge">co_await</code> expression.</p>
+
+<p>I’ll be covering details of the <strong>Promise</strong> interface in a future post, but for now let’s
+look at the <strong>Awaitable</strong> interface.</p>
+
+<h2 id="awaiters-and-awaitables-explaining-operator-co_await">Awaiters and Awaitables: Explaining <code class="language-plaintext highlighter-rouge">operator co_await</code></h2>
+
+<p>The <code class="language-plaintext highlighter-rouge">co_await</code> operator is a new unary operator that can be applied to a value.
+For example: <code class="language-plaintext highlighter-rouge">co_await someValue</code>.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">co_await</code> operator can only be used within the context of a coroutine.
+This is somewhat of a tautology though, since any function body containing use
+of the <code class="language-plaintext highlighter-rouge">co_await</code> operator, by definition, will be compiled as a coroutine.</p>
+
+<p>A type that supports the <code class="language-plaintext highlighter-rouge">co_await</code> operator is called an <strong>Awaitable</strong> type.</p>
+
+<p>Note that whether or not the <code class="language-plaintext highlighter-rouge">co_await</code> operator can be applied to a type can
+depend on the context in which the <code class="language-plaintext highlighter-rouge">co_await</code> expression appears. The promise
+type used for a coroutine can alter the meaning of a <code class="language-plaintext highlighter-rouge">co_await</code> expression
+within the coroutine via its <code class="language-plaintext highlighter-rouge">await_transform</code> method (more on this later).</p>
+
+<p>To be more specific where required I like to use the term <strong>Normally Awaitable</strong>
+to describe a type that supports the <code class="language-plaintext highlighter-rouge">co_await</code> operator in a coroutine context
+whose promise type does not have an <code class="language-plaintext highlighter-rouge">await_transform</code> member.
+And I like to use the term <strong>Contextually Awaitable</strong> to describe a type that
+only supports the <code class="language-plaintext highlighter-rouge">co_await</code> operator in the context of certain types of
+coroutines due to the presence of an <code class="language-plaintext highlighter-rouge">await_transform</code> method in the coroutine’s
+promise type. (I’m open to better suggestions for these names here…)</p>
+
+<p>An <strong>Awaiter</strong> type is a type that implements the three special methods that are
+called as part of a <code class="language-plaintext highlighter-rouge">co_await</code> expression: <code class="language-plaintext highlighter-rouge">await_ready</code>, <code class="language-plaintext highlighter-rouge">await_suspend</code> and
+<code class="language-plaintext highlighter-rouge">await_resume</code>.</p>
+
+<p>Note that I have shamelessly “borrowed” the term ‘Awaiter’ here from the C# <code class="language-plaintext highlighter-rouge">async</code>
+keyword’s mechanics that is implemented in terms of a <code class="language-plaintext highlighter-rouge">GetAwaiter()</code> method which
+returns an object with an interface that is eerily similar to the C++ concept of an <strong>Awaiter</strong>.
+See <a href="https://weblogs.asp.net/dixin/understanding-c-sharp-async-await-2-awaitable-awaiter-pattern">this post</a>
+for more details on C# awaiters.</p>
+
+<p>Note that a type can be both an <strong>Awaitable</strong> type and an <strong>Awaiter</strong> type.</p>
+
+<p>When the compiler sees a <code class="language-plaintext highlighter-rouge">co_await &lt;expr&gt;</code> expression there are actually a number of
+possible things it could be translated to depending on the types involved.</p>
+
+<h3 id="obtaining-the-awaiter">Obtaining the Awaiter</h3>
+
+<p>The first thing the compiler does is generate code to obtain the <strong>Awaiter</strong> object for the awaited value.
+There are a number of steps to obtaining the awaiter object which are set out in N4680 section 5.3.8(3).</p>
+
+<p>Let’s assume that the promise object for the awaiting coroutine has type, <code class="language-plaintext highlighter-rouge">P</code>, and that <code class="language-plaintext highlighter-rouge">promise</code>
+is an l-value reference to the promise object for the current coroutine.</p>
+
+<p>If the promise type, <code class="language-plaintext highlighter-rouge">P</code>, has a member named <code class="language-plaintext highlighter-rouge">await_transform</code> then <code class="language-plaintext highlighter-rouge">&lt;expr&gt;</code> is first passed
+into a call to <code class="language-plaintext highlighter-rouge">promise.await_transform(&lt;expr&gt;)</code> to obtain the <strong>Awaitable</strong> value, <code class="language-plaintext highlighter-rouge">awaitable</code>.
+Otherwise, if the promise type does not have an <code class="language-plaintext highlighter-rouge">await_transform</code> member then we use the
+result of evaluating <code class="language-plaintext highlighter-rouge">&lt;expr&gt;</code> directly as the <strong>Awaitable</strong> object, <code class="language-plaintext highlighter-rouge">awaitable</code>.</p>
+
+<p>Then, if the <strong>Awaitable</strong> object, <code class="language-plaintext highlighter-rouge">awaitable</code>, has an applicable <code class="language-plaintext highlighter-rouge">operator co_await()</code>
+overload then this is called to obtain the <strong>Awaiter</strong> object. Otherwise the object,
+<code class="language-plaintext highlighter-rouge">awaitable</code>, is used as the awaiter object.</p>
+
+<p>If we were to encode these rules into the functions <code class="language-plaintext highlighter-rouge">get_awaitable()</code> and <code class="language-plaintext highlighter-rouge">get_awaiter()</code>, they
+might look something like this:</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">P</span><span class="p">,</span> <span class="k">typename</span> <span class="n">T</span><span class="o">&gt;</span>
+<span class="k">decltype</span><span class="p">(</span><span class="k">auto</span><span class="p">)</span> <span class="n">get_awaitable</span><span class="p">(</span><span class="n">P</span><span class="o">&amp;</span> <span class="n">promise</span><span class="p">,</span> <span class="n">T</span><span class="o">&amp;&amp;</span> <span class="n">expr</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">if</span> <span class="k">constexpr</span> <span class="p">(</span><span class="n">has_any_await_transform_member_v</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">promise</span><span class="p">.</span><span class="n">await_transform</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&amp;&amp;&gt;</span><span class="p">(</span><span class="n">expr</span><span class="p">));</span>
+  <span class="k">else</span>
+    <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&amp;&amp;&gt;</span><span class="p">(</span><span class="n">expr</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">Awaitable</span><span class="o">&gt;</span>
+<span class="k">decltype</span><span class="p">(</span><span class="k">auto</span><span class="p">)</span> <span class="n">get_awaiter</span><span class="p">(</span><span class="n">Awaitable</span><span class="o">&amp;&amp;</span> <span class="n">awaitable</span><span class="p">)</span>
+<span class="p">{</span>
+  <span class="k">if</span> <span class="k">constexpr</span> <span class="p">(</span><span class="n">has_member_operator_co_await_v</span><span class="o">&lt;</span><span class="n">Awaitable</span><span class="o">&gt;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Awaitable</span><span class="o">&amp;&amp;&gt;</span><span class="p">(</span><span class="n">awaitable</span><span class="p">).</span><span class="k">operator</span> <span class="n">co_await</span><span class="p">();</span>
+  <span class="k">else</span> <span class="k">if</span> <span class="k">constexpr</span> <span class="p">(</span><span class="n">has_non_member_operator_co_await_v</span><span class="o">&lt;</span><span class="n">Awaitable</span><span class="o">&amp;&amp;&gt;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="k">operator</span> <span class="n">co_await</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Awaitable</span><span class="o">&amp;&amp;&gt;</span><span class="p">(</span><span class="n">awaitable</span><span class="p">));</span>
+  <span class="k">else</span>
+    <span class="k">return</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">Awaitable</span><span class="o">&amp;&amp;&gt;</span><span class="p">(</span><span class="n">awaitable</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h3 id="awaiting-the-awaiter">Awaiting the Awaiter</h3>
+
+<p>So, assuming we have encapsulated the logic for turning the <code class="language-plaintext highlighter-rouge">&lt;expr&gt;</code> result into an
+<strong>Awaiter</strong> object into the above functions then the semantics of <code class="language-plaintext highlighter-rouge">co_await &lt;expr&gt;</code>
+can be translated (roughly) as follows:</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span>
+  <span class="k">auto</span><span class="o">&amp;&amp;</span> <span class="n">value</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">expr</span><span class="o">&gt;</span><span class="p">;</span>
+  <span class="k">auto</span><span class="o">&amp;&amp;</span> <span class="n">awaitable</span> <span class="o">=</span> <span class="n">get_awaitable</span><span class="p">(</span><span class="n">promise</span><span class="p">,</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="k">decltype</span><span class="p">(</span><span class="n">value</span><span class="p">)</span><span class="o">&gt;</span><span class="p">(</span><span class="n">value</span><span class="p">));</span>
+  <span class="k">auto</span><span class="o">&amp;&amp;</span> <span class="n">awaiter</span> <span class="o">=</span> <span class="n">get_awaiter</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="k">decltype</span><span class="p">(</span><span class="n">awaitable</span><span class="p">)</span><span class="o">&gt;</span><span class="p">(</span><span class="n">awaitable</span><span class="p">));</span>
+  <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">awaiter</span><span class="p">.</span><span class="n">await_ready</span><span class="p">())</span>
+  <span class="p">{</span>
+    <span class="k">using</span> <span class="n">handle_t</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">experimental</span><span class="o">::</span><span class="n">coroutine_handle</span><span class="o">&lt;</span><span class="n">P</span><span class="o">&gt;</span><span class="p">;</span>
+
+    <span class="k">using</span> <span class="n">await_suspend_result_t</span> <span class="o">=</span>
+      <span class="k">decltype</span><span class="p">(</span><span class="n">awaiter</span><span class="p">.</span><span class="n">await_suspend</span><span class="p">(</span><span class="n">handle_t</span><span class="o">::</span><span class="n">from_promise</span><span class="p">(</span><span class="n">p</span><span class="p">)));</span>
+
+    <span class="o">&lt;</span><span class="n">suspend</span><span class="o">-</span><span class="n">coroutine</span><span class="o">&gt;</span>
+
+    <span class="k">if</span> <span class="k">constexpr</span> <span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_void_v</span><span class="o">&lt;</span><span class="n">await_suspend_result_t</span><span class="o">&gt;</span><span class="p">)</span>
+    <span class="p">{</span>
+      <span class="n">awaiter</span><span class="p">.</span><span class="n">await_suspend</span><span class="p">(</span><span class="n">handle_t</span><span class="o">::</span><span class="n">from_promise</span><span class="p">(</span><span class="n">p</span><span class="p">));</span>
+      <span class="o">&lt;</span><span class="k">return</span><span class="o">-</span><span class="n">to</span><span class="o">-</span><span class="n">caller</span><span class="o">-</span><span class="n">or</span><span class="o">-</span><span class="n">resumer</span><span class="o">&gt;</span>
+    <span class="p">}</span>
+    <span class="k">else</span>
+    <span class="p">{</span>
+      <span class="k">static_assert</span><span class="p">(</span>
+         <span class="n">std</span><span class="o">::</span><span class="n">is_same_v</span><span class="o">&lt;</span><span class="n">await_suspend_result_t</span><span class="p">,</span> <span class="kt">bool</span><span class="o">&gt;</span><span class="p">,</span>
+         <span class="s">"await_suspend() must return 'void' or 'bool'."</span><span class="p">);</span>
+
+      <span class="k">if</span> <span class="p">(</span><span class="n">awaiter</span><span class="p">.</span><span class="n">await_suspend</span><span class="p">(</span><span class="n">handle_t</span><span class="o">::</span><span class="n">from_promise</span><span class="p">(</span><span class="n">p</span><span class="p">)))</span>
+      <span class="p">{</span>
+        <span class="o">&lt;</span><span class="k">return</span><span class="o">-</span><span class="n">to</span><span class="o">-</span><span class="n">caller</span><span class="o">-</span><span class="n">or</span><span class="o">-</span><span class="n">resumer</span><span class="o">&gt;</span>
+      <span class="p">}</span>
+    <span class="p">}</span>
+
+    <span class="o">&lt;</span><span class="n">resume</span><span class="o">-</span><span class="n">point</span><span class="o">&gt;</span>
+  <span class="p">}</span>
+
+  <span class="k">return</span> <span class="n">awaiter</span><span class="p">.</span><span class="n">await_resume</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">void</code>-returning version of <code class="language-plaintext highlighter-rouge">await_suspend()</code> unconditionally transfers execution
+back to the caller/resumer of the coroutine when the call to <code class="language-plaintext highlighter-rouge">await_suspend()</code> returns,
+whereas the <code class="language-plaintext highlighter-rouge">bool</code>-returning version allows the awaiter object to conditionally resume
+the coroutine immediately without returning to the caller/resumer.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">bool</code>-returning version of <code class="language-plaintext highlighter-rouge">await_suspend()</code> can be useful in cases where the
+awaiter might start an async operation that can sometimes complete synchronously.
+In the cases where it completes synchronously, the <code class="language-plaintext highlighter-rouge">await_suspend()</code> method can
+return <code class="language-plaintext highlighter-rouge">false</code> to indicate that the coroutine should be immediately resumed and
+continue execution.</p>
+
+<p>At the <code class="language-plaintext highlighter-rouge">&lt;suspend-coroutine&gt;</code> point the compiler generates some code to save the
+current state of the coroutine and prepare it for resumption. This includes
+storing the location of the <code class="language-plaintext highlighter-rouge">&lt;resume-point&gt;</code> as well as spilling any values
+currently held in registers into the coroutine frame memory.</p>
+
+<p>The current coroutine is considered suspended after the <code class="language-plaintext highlighter-rouge">&lt;suspend-coroutine&gt;</code>
+operation completes. The first point at which you can observe the suspended
+coroutine is inside the call to <code class="language-plaintext highlighter-rouge">await_suspend()</code>. Once the coroutine is
+suspended it is then able to be resumed or destroyed.</p>
+
+<p>It is the responsibility of the <code class="language-plaintext highlighter-rouge">await_suspend()</code> method to schedule the
+coroutine for resumption (or destruction) at some point in the future once
+the operation has completed. Note that returning <code class="language-plaintext highlighter-rouge">false</code> from <code class="language-plaintext highlighter-rouge">await_suspend()</code>
+counts as scheduling the coroutine for immediate resumption on the current
+thread.</p>
+
+<p>The purpose of the <code class="language-plaintext highlighter-rouge">await_ready()</code> method is to allow you to avoid
+the cost of the <code class="language-plaintext highlighter-rouge">&lt;suspend-coroutine&gt;</code> operation in cases where it is known
+that the operation will complete synchronously without needing to suspend.</p>
+
+<p>At the <code class="language-plaintext highlighter-rouge">&lt;return-to-caller-or-resumer&gt;</code> point execution is transferred back to
+the caller or resumer, popping the local stack frame but keeping the coroutine
+frame alive.</p>
+
+<p>When (or if) the suspended coroutine is eventually resumed then the execution
+resumes at the <code class="language-plaintext highlighter-rouge">&lt;resume-point&gt;</code>. ie. immediately before the <code class="language-plaintext highlighter-rouge">await_resume()</code>
+method is called to obtain the result of the operation.</p>
+
+<p>The return-value of the <code class="language-plaintext highlighter-rouge">await_resume()</code> method call becomes the result of the
+<code class="language-plaintext highlighter-rouge">co_await</code> expression. The <code class="language-plaintext highlighter-rouge">await_resume()</code> method can also throw an exception
+in which case the exception propagates out of the <code class="language-plaintext highlighter-rouge">co_await</code> expression.</p>
+
+<p>Note that if an exception propagates out of the <code class="language-plaintext highlighter-rouge">await_suspend()</code> call then the
+coroutine is automatically resumed and the exception propagates out of the <code class="language-plaintext highlighter-rouge">co_await</code>
+expression without calling <code class="language-plaintext highlighter-rouge">await_resume()</code>.</p>
+
+<h2 id="coroutine-handles">Coroutine Handles</h2>
+
+<p>You may have noticed the use of the <code class="language-plaintext highlighter-rouge">coroutine_handle&lt;P&gt;</code> type that is passed
+to the <code class="language-plaintext highlighter-rouge">await_suspend()</code> call of a <code class="language-plaintext highlighter-rouge">co_await</code> expression.</p>
+
+<p>This type represents a non-owning handle to the coroutine frame and can be used
+to resume execution of the coroutine or to destroy the coroutine frame.
+It can also be used to get access to the coroutine’s promise object.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">coroutine_handle</code> type has the following (abbreviated) interface:</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">namespace</span> <span class="n">std</span><span class="o">::</span><span class="n">experimental</span>
+<span class="p">{</span>
+  <span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">Promise</span><span class="o">&gt;</span>
+  <span class="k">struct</span> <span class="n">coroutine_handle</span><span class="p">;</span>
+
+  <span class="k">template</span><span class="o">&lt;&gt;</span>
+  <span class="k">struct</span> <span class="n">coroutine_handle</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">&gt;</span>
+  <span class="p">{</span>
+    <span class="kt">bool</span> <span class="n">done</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+
+    <span class="kt">void</span> <span class="n">resume</span><span class="p">();</span>
+    <span class="kt">void</span> <span class="n">destroy</span><span class="p">();</span>
+
+    <span class="kt">void</span><span class="o">*</span> <span class="n">address</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+    <span class="k">static</span> <span class="n">coroutine_handle</span> <span class="n">from_address</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span> <span class="n">address</span><span class="p">);</span>
+  <span class="p">};</span>
+
+  <span class="k">template</span><span class="o">&lt;</span><span class="k">typename</span> <span class="n">Promise</span><span class="o">&gt;</span>
+  <span class="k">struct</span> <span class="n">coroutine_handle</span> <span class="o">:</span> <span class="n">coroutine_handle</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">&gt;</span>
+  <span class="p">{</span>
+    <span class="n">Promise</span><span class="o">&amp;</span> <span class="n">promise</span><span class="p">()</span> <span class="k">const</span><span class="p">;</span>
+    <span class="k">static</span> <span class="n">coroutine_handle</span> <span class="n">from_promise</span><span class="p">(</span><span class="n">Promise</span><span class="o">&amp;</span> <span class="n">promise</span><span class="p">);</span>
+
+    <span class="k">static</span> <span class="n">coroutine_handle</span> <span class="n">from_address</span><span class="p">(</span><span class="kt">void</span><span class="o">*</span> <span class="n">address</span><span class="p">);</span>
+  <span class="p">};</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>When implementing <strong>Awaitable</strong> types, they key method you’ll be using on <code class="language-plaintext highlighter-rouge">coroutine_handle</code>
+will be <code class="language-plaintext highlighter-rouge">.resume()</code>, which should be called when the operation has completed and you want
+to resume execution of the awaiting coroutine. Calling <code class="language-plaintext highlighter-rouge">.resume()</code> on a <code class="language-plaintext highlighter-rouge">coroutine_handle</code>
+reactivates a suspended coroutine at the <code class="language-plaintext highlighter-rouge">&lt;resume-point&gt;</code>. The call to <code class="language-plaintext highlighter-rouge">.resume()</code> will
+return when the coroutine next hits a <code class="language-plaintext highlighter-rouge">&lt;return-to-caller-or-resumer&gt;</code> point.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">.destroy()</code> method destroys the coroutine frame, calling the destructors of any
+in-scope variables and freeing memory used by the coroutine frame.
+You should generally not need to (and indeed should really avoid) calling <code class="language-plaintext highlighter-rouge">.destroy()</code>
+unless you are a library writer implementing the coroutine promise type. Normally,
+coroutine frames will be owned by some kind of RAII type returned from the call to
+the coroutine. So calling <code class="language-plaintext highlighter-rouge">.destroy()</code> without cooperation with the RAII object could
+lead to a double-destruction bug.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">.promise()</code> method returns a reference to the coroutine’s promise object. However, like
+<code class="language-plaintext highlighter-rouge">.destroy()</code>, it is generally only useful if you are authoring coroutine promise types.
+You should consider the coroutine’s promise object as an internal implementation detail of the
+coroutine. For most <strong>Normally Awaitable</strong> types you should use <code class="language-plaintext highlighter-rouge">coroutine_handle&lt;void&gt;</code>
+as the parameter type to the <code class="language-plaintext highlighter-rouge">await_suspend()</code> method instead of <code class="language-plaintext highlighter-rouge">coroutine_handle&lt;Promise&gt;</code>.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">coroutine_handle&lt;P&gt;::from_promise(P&amp; promise)</code> function allows reconstructing the coroutine
+handle from a reference to the coroutine’s promise object. Note that you must ensure that the type,
+<code class="language-plaintext highlighter-rouge">P</code>, exactly matches the concrete promise type used for the coroutine frame; attempting to construct
+a <code class="language-plaintext highlighter-rouge">coroutine_handle&lt;Base&gt;</code> when the concrete promise type is <code class="language-plaintext highlighter-rouge">Derived</code> can lead to undefined behaviour.</p>
+
+<p>The <code class="language-plaintext highlighter-rouge">.address()</code> / <code class="language-plaintext highlighter-rouge">from_address()</code> functions allow converting a coroutine handle to/from a
+<code class="language-plaintext highlighter-rouge">void*</code> pointer. This is primarily intended to allow passing as a ‘context’ parameter into
+existing C-style APIs, so you might find it useful in implementing <strong>Awaitable</strong> types in
+some circumstances. However, in most cases I’ve found it necessary to pass additional
+information through to callbacks in this ‘context’ parameter so I generally end up storing the
+<code class="language-plaintext highlighter-rouge">coroutine_handle</code> in a struct and passing a pointer to the struct in the ‘context’ parameter
+rather than using the <code class="language-plaintext highlighter-rouge">.address()</code> return-value.</p>
+
+<h2 id="synchronisation-free-async-code">Synchronisation-free async code</h2>
+
+<p>One of the powerful design-features of the <code class="language-plaintext highlighter-rouge">co_await</code> operator is the ability to execute
+code after the coroutine has been suspended but before execution is returned to the caller/resumer.</p>
+
+<p>This allows an Awaiter object to initiate an async operation after the coroutine is already
+suspended, passing the <code class="language-plaintext highlighter-rouge">coroutine_handle</code> of the suspended coroutine to the operation
+which it can safely resume when the operation completes (potentially on another thread)
+without any additional synchronisation required.</p>
+
+<p>For example, by starting an async-read operation inside <code class="language-plaintext highlighter-rouge">await_suspend()</code> when the coroutine
+is already suspended means that we can just resume the coroutine when the operation completes
+without needing any thread-synchronisation to coordinate the thread that started the operation
+and the thread that completed the operation.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Time     Thread 1                           Thread 2
+  |      --------                           --------
+  |      ....                               Call OS - Wait for I/O event
+  |      Call await_ready()                    |
+  |      &lt;supend-point&gt;                        |
+  |      Call await_suspend(handle)            |
+  |        Store handle in operation           |
+  V        Start AsyncFileRead ---+            V
+                                  +-----&gt;   &lt;AsyncFileRead Completion Event&gt;
+                                            Load coroutine_handle from operation
+                                            Call handle.resume()
+                                              &lt;resume-point&gt;
+                                              Call to await_resume()
+                                              execution continues....
+           Call to AsyncFileRead returns
+         Call to await_suspend() returns
+         &lt;return-to-caller/resumer&gt;
+</code></pre></div></div>
+
+<p>One thing to be <em>very</em> careful of when taking advantage of this approach is that as
+soon as you have started the operation which publishes the coroutine handle to other
+threads then another thread may resume the coroutine on another thread before
+<code class="language-plaintext highlighter-rouge">await_suspend()</code> returns and may continue executing concurrently with the rest of
+the <code class="language-plaintext highlighter-rouge">await_suspend()</code> method.</p>
+
+<p>The first thing the coroutine will do when it resumes is call <code class="language-plaintext highlighter-rouge">await_resume()</code> to get
+the result and then often it will immediately destruct the <strong>Awaiter</strong> object
+(ie. the <code class="language-plaintext highlighter-rouge">this</code> pointer of the <code class="language-plaintext highlighter-rouge">await_suspend()</code> call).
+The coroutine could then potentially run to completion, destructing the coroutine and
+promise object, all before <code class="language-plaintext highlighter-rouge">await_suspend()</code> returns.</p>
+
+<p>So within the <code class="language-plaintext highlighter-rouge">await_suspend()</code> method, once it’s possible for the coroutine to be
+resumed concurrently on another thread, you need to make sure that you avoid accessing
+<code class="language-plaintext highlighter-rouge">this</code> or the coroutine’s <code class="language-plaintext highlighter-rouge">.promise()</code> object because both could already be destroyed.
+In general, the only things that are safe to access after the operation is started and
+the coroutine is scheduled for resumption are local variables within <code class="language-plaintext highlighter-rouge">await_suspend()</code>.</p>
+
+<h3 id="comparison-to-stackful-coroutines">Comparison to Stackful Coroutines</h3>
+
+<p>I want to take a quick detour to compare this ability of the Coroutines TS stackless coroutines
+to execute logic after the coroutine is suspended with some existing common stackful coroutine
+facilities such as Win32 fibers or boost::context.</p>
+
+<p>With many of the stackful coroutine frameworks, the suspend operation of a coroutine is
+combined with the resumption of another coroutine into a ‘context-switch’ operation.
+With this ‘context-switch’ operation there is typically no opportunity to execute logic
+after suspending the current coroutine but before transferring execution to another coroutine.</p>
+
+<p>This means that if we want to implement a similar async-file-read operation on top of
+stackful coroutines then we have to start the operation <em>before</em> suspending the coroutine.
+It is therefore possible that the operation could complete on another thread before the
+coroutine is suspended and is eligible for resumption. This potential race between the
+operation completing on another thread and the coroutine suspending requires some kind
+of thread synchronisation to arbitrate and decide on the winner.</p>
+
+<p>There are probably ways around this by using a trampoline context that can start the
+operation on behalf of the initiating context after the initiating context has been
+suspended. However this would require extra infrastructure and an extra context-switch
+to make it work and it’s possible that the overhead this introduces would be greater
+than the cost of the synchronisation it’s trying to avoid.</p>
+
+<h2 id="avoiding-memory-allocations">Avoiding memory allocations</h2>
+
+<p>Async operations often need to store some per-operation state that keeps track
+of the progress of the operation. This state typically needs to last for the duration
+of the operation and should only be freed once the operation has completed.</p>
+
+<p>For example, calling async Win32 I/O functions requires you to allocate and pass a
+pointer to an <code class="language-plaintext highlighter-rouge">OVERLAPPED</code> structure. The caller is responsible for ensuring this
+pointer remains valid until the operation completes.</p>
+
+<p>With traditional callback-based APIs this state would typically need to be allocated
+on the heap to ensure it has the appropriate lifetime. If you were performing many
+operations, you may need to allocate and free this state for each operation.
+If performance is an issue then a custom allocator may be used that allocates these
+state objects from a pool.</p>
+
+<p>However, when we are using coroutines we can avoid the need to heap-allocate storage
+for the operation state by taking advantage of the fact that local variables within
+the coroutine frame will be kept alive while the coroutine is suspended.</p>
+
+<p>By placing the per-operation state in the <strong>Awaiter</strong> object we can effectively
+“borrow” memory from the coroutine frame for storing the per-operation state for
+the duration of the <code class="language-plaintext highlighter-rouge">co_await</code> expression. Once the operation completes, the coroutine
+is resumed and the <strong>Awaiter</strong> object is destroyed, freeing that memory in the
+coroutine frame for use by other local variables.</p>
+
+<p>Ultimately, the coroutine frame may still be allocated on the heap. However, once allocated,
+a coroutine frame can be used to execute many asynchronous operations with only that
+single heap allocation.</p>
+
+<p>If you think about it, the coroutine frame acts as a kind of really high-performance
+arena memory allocator. The compiler figures out at compile time the total arena size
+it needs for all local variables and is then able to allocate this memory out to local
+variables as required with zero overhead! Try beating that with a custom allocator ;)</p>
+
+<h2 id="an-example-implementing-a-simple-thread-synchronisation-primitive">An example: Implementing a simple thread-synchronisation primitive</h2>
+
+<p>Now that we’ve covered a lot of the mechanics of the <code class="language-plaintext highlighter-rouge">co_await</code> operator, I want to show
+how to put some of this knowledge into practice by implementing a basic awaitable
+synchronisation primitive: An asynchronous manual-reset event.</p>
+
+<p>The basic requirements of this event is that it needs to be <strong>Awaitable</strong> by multiple
+concurrently executing coroutines and when awaited needs to suspend the awaiting
+coroutine until some thread calls the <code class="language-plaintext highlighter-rouge">.set()</code> method, at which point any awaiting
+coroutines are resumed. If some thread has already called <code class="language-plaintext highlighter-rouge">.set()</code> then the coroutine
+should continue without suspending.</p>
+
+<p>Ideally we’d also like to make it <code class="language-plaintext highlighter-rouge">noexcept</code>, require no heap allocations and have a
+lock-free implementation.</p>
+
+<p><strong>Edit 2017/11/23: Added example usage for <code class="language-plaintext highlighter-rouge">async_manual_reset_event</code></strong></p>
+
+<p>Example usage should look something like this:</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">T</span> <span class="n">value</span><span class="p">;</span>
+<span class="n">async_manual_reset_event</span> <span class="n">event</span><span class="p">;</span>
+
+<span class="c1">// A single call to produce a value</span>
+<span class="kt">void</span> <span class="nf">producer</span><span class="p">()</span>
+<span class="p">{</span>
+  <span class="n">value</span> <span class="o">=</span> <span class="n">some_long_running_computation</span><span class="p">();</span>
+
+  <span class="c1">// Publish the value by setting the event.</span>
+  <span class="n">event</span><span class="p">.</span><span class="n">set</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="c1">// Supports multiple concurrent consumers</span>
+<span class="n">task</span><span class="o">&lt;&gt;</span> <span class="n">consumer</span><span class="p">()</span>
+<span class="p">{</span>
+  <span class="c1">// Wait until the event is signalled by call to event.set()</span>
+  <span class="c1">// in the producer() function.</span>
+  <span class="n">co_await</span> <span class="n">event</span><span class="p">;</span>
+
+  <span class="c1">// Now it's safe to consume 'value'</span>
+  <span class="c1">// This is guaranteed to 'happen after' assignment to 'value'</span>
+  <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="n">value</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Let’s first think about the possible states this event can be in: ‘not set’ and ‘set’.</p>
+
+<p>When it’s in the ‘not set’ state there is a (possibly empty) list of waiting coroutines
+that are waiting for it to become ‘set’.</p>
+
+<p>When it’s in the ‘set’ state there won’t be any waiting coroutines as coroutines that 
+<code class="language-plaintext highlighter-rouge">co_await</code> the event in this state can continue without suspending.</p>
+
+<p>This state can actually be represented in a single <code class="language-plaintext highlighter-rouge">std::atomic&lt;void*&gt;</code>.</p>
+<ul>
+  <li>Reserve a special pointer value for the ‘set’ state.
+In this case we’ll use the <code class="language-plaintext highlighter-rouge">this</code> pointer of the event since we know that can’t be the same address as any of the list items.</li>
+  <li>Otherwise the event is in the ‘not set’ state and the value is a pointer to the head of a singly linked-list of awaiting coroutine structures.</li>
+</ul>
+
+<p>We can avoid extra calls to allocate nodes for the linked-list on the heap by storing the
+nodes within an ‘awaiter’ object that is placed within the coroutine frame.</p>
+
+<p>So let’s start with a class interface that looks something like this:</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">async_manual_reset_event</span>
+<span class="p">{</span>
+<span class="nl">public:</span>
+
+  <span class="n">async_manual_reset_event</span><span class="p">(</span><span class="kt">bool</span> <span class="n">initiallySet</span> <span class="o">=</span> <span class="nb">false</span><span class="p">)</span> <span class="k">noexcept</span><span class="p">;</span>
+
+  <span class="c1">// No copying/moving</span>
+  <span class="n">async_manual_reset_event</span><span class="p">(</span><span class="k">const</span> <span class="n">async_manual_reset_event</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+  <span class="n">async_manual_reset_event</span><span class="p">(</span><span class="n">async_manual_reset_event</span><span class="o">&amp;&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+  <span class="n">async_manual_reset_event</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="k">const</span> <span class="n">async_manual_reset_event</span><span class="o">&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+  <span class="n">async_manual_reset_event</span><span class="o">&amp;</span> <span class="k">operator</span><span class="o">=</span><span class="p">(</span><span class="n">async_manual_reset_event</span><span class="o">&amp;&amp;</span><span class="p">)</span> <span class="o">=</span> <span class="k">delete</span><span class="p">;</span>
+
+  <span class="kt">bool</span> <span class="n">is_set</span><span class="p">()</span> <span class="k">const</span> <span class="k">noexcept</span><span class="p">;</span>
+
+  <span class="k">struct</span> <span class="n">awaiter</span><span class="p">;</span>
+  <span class="n">awaiter</span> <span class="k">operator</span> <span class="n">co_await</span><span class="p">()</span> <span class="k">const</span> <span class="k">noexcept</span><span class="p">;</span>
+
+  <span class="kt">void</span> <span class="n">set</span><span class="p">()</span> <span class="k">noexcept</span><span class="p">;</span>
+  <span class="kt">void</span> <span class="n">reset</span><span class="p">()</span> <span class="k">noexcept</span><span class="p">;</span>
+
+<span class="nl">private:</span>
+
+  <span class="k">friend</span> <span class="k">struct</span> <span class="n">awaiter</span><span class="p">;</span>
+
+  <span class="c1">// - 'this' =&gt; set state</span>
+  <span class="c1">// - otherwise =&gt; not set, head of linked list of awaiter*.</span>
+  <span class="k">mutable</span> <span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">void</span><span class="o">*&gt;</span> <span class="n">m_state</span><span class="p">;</span>
+
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>Here we have a fairly straight-forward and simple interface. The main thing to note
+at this point is that it has an <code class="language-plaintext highlighter-rouge">operator co_await()</code> method that returns an, as yet,
+undefined type, <code class="language-plaintext highlighter-rouge">awaiter</code>.</p>
+
+<p>Let’s define the <code class="language-plaintext highlighter-rouge">awaiter</code> type now.</p>
+
+<h3 id="defining-the-awaiter">Defining the Awaiter</h3>
+
+<p>Firstly, it needs to know which <code class="language-plaintext highlighter-rouge">async_manual_reset_event</code> object it is going to be
+awaiting, so it will need a reference to the event and a constructor to initialise it.</p>
+
+<p>It also needs to act as a node in a linked-list of <code class="language-plaintext highlighter-rouge">awaiter</code> values so it will need 
+to hold a pointer to the next <code class="language-plaintext highlighter-rouge">awaiter</code> object in the list.</p>
+
+<p>It also needs to store the <code class="language-plaintext highlighter-rouge">coroutine_handle</code> of the awaiting coroutine that is executing
+the <code class="language-plaintext highlighter-rouge">co_await</code> expression so that the event can resume the coroutine when it becomes ‘set’.
+We don’t care what the promise type of the coroutine is so we’ll just use a
+<code class="language-plaintext highlighter-rouge">coroutine_handle&lt;&gt;</code> (which is short-hand for <code class="language-plaintext highlighter-rouge">coroutine_handle&lt;void&gt;</code>).</p>
+
+<p>Finally, it needs to implement the <strong>Awaiter</strong> interface, so it needs the three special
+methods: <code class="language-plaintext highlighter-rouge">await_ready</code>, <code class="language-plaintext highlighter-rouge">await_suspend</code> and <code class="language-plaintext highlighter-rouge">await_resume</code>. We don’t need to return a
+value from the <code class="language-plaintext highlighter-rouge">co_await</code> expression so <code class="language-plaintext highlighter-rouge">await_resume</code> can return <code class="language-plaintext highlighter-rouge">void</code>.</p>
+
+<p>Once we put all of that together, the basic class interface for <code class="language-plaintext highlighter-rouge">awaiter</code> looks like this:</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">struct</span> <span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">awaiter</span>
+<span class="p">{</span>
+  <span class="n">awaiter</span><span class="p">(</span><span class="k">const</span> <span class="n">async_manual_reset_event</span><span class="o">&amp;</span> <span class="n">event</span><span class="p">)</span> <span class="k">noexcept</span>
+  <span class="o">:</span> <span class="n">m_event</span><span class="p">(</span><span class="n">event</span><span class="p">)</span>
+  <span class="p">{}</span>
+
+  <span class="kt">bool</span> <span class="n">await_ready</span><span class="p">()</span> <span class="k">const</span> <span class="k">noexcept</span><span class="p">;</span>
+  <span class="kt">bool</span> <span class="n">await_suspend</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">experimental</span><span class="o">::</span><span class="n">coroutine_handle</span><span class="o">&lt;&gt;</span> <span class="n">awaitingCoroutine</span><span class="p">)</span> <span class="k">noexcept</span><span class="p">;</span>
+  <span class="kt">void</span> <span class="n">await_resume</span><span class="p">()</span> <span class="k">noexcept</span> <span class="p">{}</span>
+
+<span class="nl">private:</span>
+
+  <span class="k">const</span> <span class="n">async_manual_reset_event</span><span class="o">&amp;</span> <span class="n">m_event</span><span class="p">;</span>
+  <span class="n">std</span><span class="o">::</span><span class="n">experimental</span><span class="o">::</span><span class="n">coroutine_handle</span><span class="o">&lt;&gt;</span> <span class="n">m_awaitingCoroutine</span><span class="p">;</span>
+  <span class="n">awaiter</span><span class="o">*</span> <span class="n">m_next</span><span class="p">;</span>
+<span class="p">};</span>
+</code></pre></div></div>
+
+<p>Now, when we <code class="language-plaintext highlighter-rouge">co_await</code> an event, we don’t want the awaiting coroutine to suspend if
+the event is already set. So we can define <code class="language-plaintext highlighter-rouge">await_ready()</code> to return <code class="language-plaintext highlighter-rouge">true</code> if the
+event is already set.</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">bool</span> <span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">awaiter</span><span class="o">::</span><span class="n">await_ready</span><span class="p">()</span> <span class="k">const</span> <span class="k">noexcept</span>
+<span class="p">{</span>
+  <span class="k">return</span> <span class="n">m_event</span><span class="p">.</span><span class="n">is_set</span><span class="p">();</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Next, let’s look at the <code class="language-plaintext highlighter-rouge">await_suspend()</code> method. This is usually where most of the
+magic happens in an awaitable type.</p>
+
+<p>First it will need to stash the coroutine handle of the awaiting coroutine into the
+<code class="language-plaintext highlighter-rouge">m_awaitingCoroutine</code> member so that the event can later call <code class="language-plaintext highlighter-rouge">.resume()</code> on it.</p>
+
+<p>Then once we’ve done that we need to try and atomically enqueue the awaiter onto
+the linked list of waiters. If we successfully enqueue it then we return <code class="language-plaintext highlighter-rouge">true</code>
+to indicate that we don’t want to resume the coroutine immediately, otherwise if
+we find that the event has concurrently been changed to the ‘set’ state then we
+return <code class="language-plaintext highlighter-rouge">false</code> to indicate that the coroutine should be resumed immediately.</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">bool</span> <span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">awaiter</span><span class="o">::</span><span class="n">await_suspend</span><span class="p">(</span>
+  <span class="n">std</span><span class="o">::</span><span class="n">experimental</span><span class="o">::</span><span class="n">coroutine_handle</span><span class="o">&lt;&gt;</span> <span class="n">awaitingCoroutine</span><span class="p">)</span> <span class="k">noexcept</span>
+<span class="p">{</span>
+  <span class="c1">// Special m_state value that indicates the event is in the 'set' state.</span>
+  <span class="k">const</span> <span class="kt">void</span><span class="o">*</span> <span class="k">const</span> <span class="n">setState</span> <span class="o">=</span> <span class="o">&amp;</span><span class="n">m_event</span><span class="p">;</span>
+
+  <span class="c1">// Remember the handle of the awaiting coroutine.</span>
+  <span class="n">m_awaitingCoroutine</span> <span class="o">=</span> <span class="n">awaitingCoroutine</span><span class="p">;</span>
+
+  <span class="c1">// Try to atomically push this awaiter onto the front of the list.</span>
+  <span class="kt">void</span><span class="o">*</span> <span class="n">oldValue</span> <span class="o">=</span> <span class="n">m_event</span><span class="p">.</span><span class="n">m_state</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">);</span>
+  <span class="k">do</span>
+  <span class="p">{</span>
+    <span class="c1">// Resume immediately if already in 'set' state.</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">oldValue</span> <span class="o">==</span> <span class="n">setState</span><span class="p">)</span> <span class="k">return</span> <span class="nb">false</span><span class="p">;</span> 
+
+    <span class="c1">// Update linked list to point at current head.</span>
+    <span class="n">m_next</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">awaiter</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">oldValue</span><span class="p">);</span>
+
+    <span class="c1">// Finally, try to swap the old list head, inserting this awaiter</span>
+    <span class="c1">// as the new list head.</span>
+  <span class="p">}</span> <span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="n">m_event</span><span class="p">.</span><span class="n">m_state</span><span class="p">.</span><span class="n">compare_exchange_weak</span><span class="p">(</span>
+             <span class="n">oldValue</span><span class="p">,</span>
+             <span class="k">this</span><span class="p">,</span>
+             <span class="n">std</span><span class="o">::</span><span class="n">memory_order_release</span><span class="p">,</span>
+             <span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">));</span>
+
+  <span class="c1">// Successfully enqueued. Remain suspended.</span>
+  <span class="k">return</span> <span class="nb">true</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Note that we use ‘acquire’ memory order when loading the old state so that
+if we read the special ‘set’ value then we have visibility of writes that
+occurred prior to the call to ‘set()’.</p>
+
+<p>We require ‘release’ sematics if the compare-exchange succeeds so that a
+subsequent call to ‘set()’ will see our writes to m_awaitingCoroutine and
+prior writes to the coroutine state.</p>
+
+<h3 id="filling-out-the-rest-of-the-event-class">Filling out the rest of the event class</h3>
+
+<p>Now that we have defined the <code class="language-plaintext highlighter-rouge">awaiter</code> type, let’s go back and look at the
+implementation of the <code class="language-plaintext highlighter-rouge">async_manual_reset_event</code> methods.</p>
+
+<p>First, the constructor. It needs to initialise to either the ‘not set’ state
+with the empty list of waiters (ie. <code class="language-plaintext highlighter-rouge">nullptr</code>) or initialise to the ‘set’ state
+(ie. <code class="language-plaintext highlighter-rouge">this</code>).</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">async_manual_reset_event</span><span class="p">(</span>
+  <span class="kt">bool</span> <span class="n">initiallySet</span><span class="p">)</span> <span class="k">noexcept</span>
+<span class="o">:</span> <span class="n">m_state</span><span class="p">(</span><span class="n">initiallySet</span> <span class="o">?</span> <span class="k">this</span> <span class="o">:</span> <span class="nb">nullptr</span><span class="p">)</span>
+<span class="p">{}</span>
+</code></pre></div></div>
+
+<p>Next, the <code class="language-plaintext highlighter-rouge">is_set()</code> method is pretty straight-forward - it’s ‘set’ if it
+has the special value <code class="language-plaintext highlighter-rouge">this</code>:</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">bool</span> <span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">is_set</span><span class="p">()</span> <span class="k">const</span> <span class="k">noexcept</span>
+<span class="p">{</span>
+  <span class="k">return</span> <span class="n">m_state</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">)</span> <span class="o">==</span> <span class="k">this</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Next, the <code class="language-plaintext highlighter-rouge">reset()</code> method. If it’s in the ‘set’ state we want to transition back
+to the empty-list ‘not set’ state, otherwise leave it as it is.</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">reset</span><span class="p">()</span> <span class="k">noexcept</span>
+<span class="p">{</span>
+  <span class="kt">void</span><span class="o">*</span> <span class="n">oldValue</span> <span class="o">=</span> <span class="k">this</span><span class="p">;</span>
+  <span class="n">m_state</span><span class="p">.</span><span class="n">compare_exchange_strong</span><span class="p">(</span><span class="n">oldValue</span><span class="p">,</span> <span class="nb">nullptr</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">memory_order_acquire</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>With the <code class="language-plaintext highlighter-rouge">set()</code> method, we want to transition to the ‘set’ state by exchanging
+the current state with the special ‘set’ value, <code class="language-plaintext highlighter-rouge">this</code>, and then examine what
+the old value was. If there were any waiting coroutines then we want to resume
+each of them sequentially in turn before returning.</p>
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kt">void</span> <span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">set</span><span class="p">()</span> <span class="k">noexcept</span>
+<span class="p">{</span>
+  <span class="c1">// Needs to be 'release' so that subsequent 'co_await' has</span>
+  <span class="c1">// visibility of our prior writes.</span>
+  <span class="c1">// Needs to be 'acquire' so that we have visibility of prior</span>
+  <span class="c1">// writes by awaiting coroutines.</span>
+  <span class="kt">void</span><span class="o">*</span> <span class="n">oldValue</span> <span class="o">=</span> <span class="n">m_state</span><span class="p">.</span><span class="n">exchange</span><span class="p">(</span><span class="k">this</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">memory_order_acq_rel</span><span class="p">);</span>
+  <span class="k">if</span> <span class="p">(</span><span class="n">oldValue</span> <span class="o">!=</span> <span class="k">this</span><span class="p">)</span>
+  <span class="p">{</span>
+    <span class="c1">// Wasn't already in 'set' state.</span>
+    <span class="c1">// Treat old value as head of a linked-list of waiters</span>
+    <span class="c1">// which we have now acquired and need to resume.</span>
+    <span class="k">auto</span><span class="o">*</span> <span class="n">waiters</span> <span class="o">=</span> <span class="k">static_cast</span><span class="o">&lt;</span><span class="n">awaiter</span><span class="o">*&gt;</span><span class="p">(</span><span class="n">oldValue</span><span class="p">);</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">waiters</span> <span class="o">!=</span> <span class="nb">nullptr</span><span class="p">)</span>
+    <span class="p">{</span>
+      <span class="c1">// Read m_next before resuming the coroutine as resuming</span>
+      <span class="c1">// the coroutine will likely destroy the awaiter object.</span>
+      <span class="k">auto</span><span class="o">*</span> <span class="n">next</span> <span class="o">=</span> <span class="n">waiters</span><span class="o">-&gt;</span><span class="n">m_next</span><span class="p">;</span>
+      <span class="n">waiters</span><span class="o">-&gt;</span><span class="n">m_awaitingCoroutine</span><span class="p">.</span><span class="n">resume</span><span class="p">();</span>
+      <span class="n">waiters</span> <span class="o">=</span> <span class="n">next</span><span class="p">;</span>
+    <span class="p">}</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Finally, we need to implement the <code class="language-plaintext highlighter-rouge">operator co_await()</code> method.
+This just needs to construct an <code class="language-plaintext highlighter-rouge">awaiter</code> object.</p>
+
+<div class="language-c++ highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">async_manual_reset_event</span><span class="o">::</span><span class="n">awaiter</span>
+<span class="n">async_manual_reset_event</span><span class="o">::</span><span class="k">operator</span> <span class="n">co_await</span><span class="p">()</span> <span class="k">const</span> <span class="k">noexcept</span>
+<span class="p">{</span>
+  <span class="k">return</span> <span class="n">awaiter</span><span class="p">{</span> <span class="o">*</span><span class="k">this</span> <span class="p">};</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>And there we have it. An awaitable asynchronous manual-reset event that has
+a lock-free, memory-allocation-free, <code class="language-plaintext highlighter-rouge">noexcept</code> implementation.</p>
+
+<p>If you want to have a play with the code or check out what it compiles
+down to under MSVC and Clang have a look at the <a href="https://godbolt.org/g/Ad47tH">source on godbolt</a>.</p>
+
+<p>You can also find an implementation of this class available in the
+<a href="https://github.com/lewissbaker/cppcoro">cppcoro</a> library, along with a number
+of other useful awaitable types such as <code class="language-plaintext highlighter-rouge">async_mutex</code> and <code class="language-plaintext highlighter-rouge">async_auto_reset_event</code>.</p>
+
+<h2 id="closing-off">Closing Off</h2>
+
+<p>This post has looked at how the <code class="language-plaintext highlighter-rouge">operator co_await</code> is implemented and defined
+in terms of the <strong>Awaitable</strong> and <strong>Awaiter</strong> concepts.</p>
+
+<p>It has also walked through how to implement an awaitable async thread-synchronisation
+primitive that takes advantage of the fact that awaiter objects are allocated on the
+coroutine frame to avoid additional heap allocations.</p>
+
+<p>I hope this post has helped to demystify the new <code class="language-plaintext highlighter-rouge">co_await</code> operator for you.</p>
+
+<p>In the next post I’ll explore the <strong>Promise</strong> concept and how a coroutine-type author
+can customise the behaviour of their coroutine.</p>
+
+<h2 id="thanks">Thanks</h2>
+
+<p>I want to call out special thanks to Gor Nishanov for patiently and enthusiastically
+answering my many questions on coroutines over the last couple of years.</p>
+
+<p>And also to Eric Niebler for reviewing and providing feedback on an early draft of
+this post.</p>
+
+  </div>
+
+  
+  <footer class="post-footer">
+    <div class="post-comments">
+      <hr/>
+      <h3>Comments</h3>
+      <p>
+        Comments are welcome in <a href="https://github.com/lewissbaker/lewissbaker.github.io/issues/2">this GitHub issue</a>
+      </p>
+    </div>
+  </footer>
+  
+
+  
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Asymmetric Transfer</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Lewis Baker</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"><li><a href="https://github.com/lewissbaker"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">lewissbaker</span></a></li><li><a href="https://www.twitter.com/lewissbaker"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#twitter"></use></svg> <span class="username">lewissbaker</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Some thoughts on programming, C++ and other things.
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

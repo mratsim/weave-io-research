@@ -14,6 +14,9 @@ Alternatively this post in the Python mailing list from 1999 is also a good expl
 Layman's explanation of delimited continuations with examples of using them for exception handling and nondeterministic programming.
 - https://gist.github.com/sebfisch/2235780
 
+The Rise of Coroutines, by Kotlin Coroutines lead:
+- https://learningactors.com/the-rise-of-the-coroutines/
+
 ## Included in repo
 
 - General: Layman's explanation of delimited continuations
@@ -28,6 +31,9 @@ Layman's explanation of delimited continuations with examples of using them for 
   - Manual: https://github.com/kerneis/cpc/tree/develop/doc
 - Continuations in C: https://web.archive.org/web/20100106212446/http://homepage.mac.com/sigfpe/Computing/continuations.html
 - Continuations in Cee: https://wiki.c2.com/?ContinuationsInCee
+- C++ coroutines:
+  - Theory: https://lewissbaker.github.io/2017/09/25/coroutine-theory
+  - co_await: https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await
 
 - F#: Implementing coroutines (async/await) with continuations: https://gist.github.com/mrange/147fe94da28fbb237af4e9bd39da4ad3
 - Kotlin coroutines: https://github.com/Kotlin/KEEP/blob/31bb8af/proposals/coroutines.md
@@ -74,7 +80,16 @@ _Note 2: Rust seems to have come to the same conclusion. Rust features are delay
 - Continuations in C: https://web.archive.org/web/20100106212446/http://homepage.mac.com/sigfpe/Computing/continuations.html
 - Continuations in Cee: https://wiki.c2.com/?ContinuationsInCee
 
-## C# Async/Await
+### C++ coroutines
+
+- C++ Coroutines: A negative overhead abstraction
+  - https://www.youtube.com/watch?v=_fu0gx-xseY
+  - https://github.com/GorNishanov/await/tree/master/2015_CppCon/SuperLean
+
+- Coroutines: what can't they do with
+  - https://youtu.be/mlP1MKP8d_Q
+
+### C# Async/Await
 
 - C# Async/Await compilation in state machine:\
   https://weblogs.asp.net/dixin/understanding-c-sharp-async-await-1-compilation
@@ -309,6 +324,16 @@ or ensure reentrancy if used as a library.
 - FairThread switchable schedulers: http://www-sop.inria.fr/mimosa/rp/FairThreads/FTC/documentation/ft.pdf
 
 ## Async I/O frameworks
+- CppCoro by Lewis Baker: https://github.com/lewissbaker/cppcoro
+  - Task, generator
+  - Scheduler
+  - Event, Barrier
+  - Cancellation
+  - Threadpool
+  - File IO
+  - Socket IO, IP
+  - awaitable traits
+  - awaiter, awaitable, scheduler concepts
 
 - C++ Elle by Docker: https://github.com/infinit/elle
   - elle: Utilities including serialization, logs, buffer, formatting, ...

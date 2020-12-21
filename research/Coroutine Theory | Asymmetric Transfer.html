@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en-AU"><head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1"><!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Coroutine Theory | Asymmetric Transfer</title>
+<meta name="generator" content="Jekyll v3.8.5" />
+<meta property="og:title" content="Coroutine Theory" />
+<meta name="author" content="Lewis Baker" />
+<meta property="og:locale" content="en_AU" />
+<meta name="description" content="In this post I will describe the differences between functions and coroutines and provide a bit of theory about the operations they support. The aim of this post is introduce some foundational concepts that will help frame the way you think about C++ Coroutines." />
+<meta property="og:description" content="In this post I will describe the differences between functions and coroutines and provide a bit of theory about the operations they support. The aim of this post is introduce some foundational concepts that will help frame the way you think about C++ Coroutines." />
+<link rel="canonical" href="https://lewissbaker.github.io/2017/09/25/coroutine-theory" />
+<meta property="og:url" content="https://lewissbaker.github.io/2017/09/25/coroutine-theory" />
+<meta property="og:site_name" content="Asymmetric Transfer" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2017-09-25T00:00:00+00:00" />
+<script type="application/ld+json">
+{"mainEntityOfPage":{"@type":"WebPage","@id":"https://lewissbaker.github.io/2017/09/25/coroutine-theory"},"@type":"BlogPosting","url":"https://lewissbaker.github.io/2017/09/25/coroutine-theory","author":{"@type":"Person","name":"Lewis Baker"},"headline":"Coroutine Theory","dateModified":"2017-09-25T00:00:00+00:00","datePublished":"2017-09-25T00:00:00+00:00","description":"In this post I will describe the differences between functions and coroutines and provide a bit of theory about the operations they support. The aim of this post is introduce some foundational concepts that will help frame the way you think about C++ Coroutines.","@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+<link rel="stylesheet" href="/assets/main.css"><link type="application/atom+xml" rel="alternate" href="https://lewissbaker.github.io/feed.xml" title="Asymmetric Transfer" /><script>
+if(!(window.doNotTrack === "1" || navigator.doNotTrack === "1" || navigator.doNotTrack === "yes" || navigator.msDoNotTrack === "1")) {
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-107310540-1', 'auto');
+  ga('send', 'pageview');
+}
+</script>
+  
+</head>
+<body><header class="site-header" role="banner">
+
+  <div class="wrapper"><a class="site-title" rel="author" href="/">Asymmetric Transfer</a><nav class="site-nav">
+        <input type="checkbox" id="nav-trigger" class="nav-trigger" />
+        <label for="nav-trigger">
+          <span class="menu-icon">
+            <svg viewBox="0 0 18 15" width="18px" height="15px">
+              <path d="M18,1.484c0,0.82-0.665,1.484-1.484,1.484H1.484C0.665,2.969,0,2.304,0,1.484l0,0C0,0.665,0.665,0,1.484,0 h15.032C17.335,0,18,0.665,18,1.484L18,1.484z M18,7.516C18,8.335,17.335,9,16.516,9H1.484C0.665,9,0,8.335,0,7.516l0,0 c0-0.82,0.665-1.484,1.484-1.484h15.032C17.335,6.031,18,6.696,18,7.516L18,7.516z M18,13.516C18,14.335,17.335,15,16.516,15H1.484 C0.665,15,0,14.335,0,13.516l0,0c0-0.82,0.665-1.483,1.484-1.483h15.032C17.335,12.031,18,12.695,18,13.516L18,13.516z"/>
+            </svg>
+          </span>
+        </label>
+
+        <div class="trigger"></div>
+      </nav></div>
+</header>
+<main class="page-content" aria-label="Content">
+      <div class="wrapper">
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+
+  <header class="post-header">
+    <h1 class="post-title" itemprop="name headline">Coroutine Theory</h1>
+    <p class="post-meta">
+      <time datetime="2017-09-25T00:00:00+00:00" itemprop="datePublished">
+        
+        Sep 25, 2017
+      </time>
+      </p>
+  </header>
+
+  <div class="post-content" itemprop="articleBody">
+    <p>This is the first of a series of posts on the <a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4680.pdf">C++ Coroutines TS</a>, a new
+language feature that is currently on track for inclusion into the
+C++20 language standard.</p>
+
+<p>In this series I will cover how the underlying mechanics of C++ Coroutines
+work as well as show how they can be used to build useful higher-level abstractions
+such as those provided by the <a href="https://github.com/lewissbaker/cppcoro">cppcoro</a>
+library.</p>
+
+<p>In this post I will describe the differences between functions and coroutines
+and provide a bit of theory about the operations they support. The aim of this post
+is introduce some foundational concepts that will help frame the way you think about
+C++ Coroutines.</p>
+
+<h2 id="coroutines-are-functions-are-coroutines">Coroutines are Functions are Coroutines</h2>
+
+<p>A coroutine is a generalisation of a function that allows the function to
+be suspended and then later resumed.</p>
+
+<p>I will explain what this means in a bit more detail, but before I do I want
+to first review how a “normal” C++ function works.</p>
+
+<h2 id="normal-functions">“Normal” Functions</h2>
+
+<p>A normal function can be thought of as having two operations: <strong>Call</strong> and <strong>Return</strong>
+(Note that I’m lumping “throwing an exception” here broadly under the <strong>Return</strong> operation).</p>
+
+<p>The <strong>Call</strong> operation creates an activation frame, suspends execution of the calling
+function and transfers execution to the start of the function being called.</p>
+
+<p>The <strong>Return</strong> operation passes the return-value to the caller, destroys the activation frame
+and then resumes execution of the caller just after the point at which it called the function.</p>
+
+<p>Let’s analyse these semantics a little more…</p>
+
+<h3 id="activation-frames">Activation Frames</h3>
+
+<p>So what is this ‘activation frame’ thing?</p>
+
+<p>You can think of the activation frame as the block of memory that holds the current state
+of a particular invocation of a function. This state includes the values of any parameters
+that were passed to it and the values of any local variables.</p>
+
+<p>For “normal” functions, the activation frame also includes the return-address - the address
+of the instruction to transfer execution to upon returning from the function - and the
+address of the activation frame for the invocation of the calling function. You can think
+of these pieces of information together as describing the ‘continuation’ of the function-call.
+ie. they describe which invocation of which function should continue executing at which point
+when this function completes.</p>
+
+<p>With “normal” functions, all activation frames have strictly nested lifetimes.
+This strict nesting allows use of a highly efficient memory allocation data-structure
+for allocating and freeing the activation frames for each of the function calls.
+This data-structure is commonly referred to as “the stack”.</p>
+
+<p>When an activation frame is allocated on this stack data structure it is often
+called a “stack frame”.</p>
+
+<p>This stack data-structure is so common that most (all?) CPU architectures have a dedicated
+register for holding a pointer to the top of the stack (eg. in X64 it is the <code class="language-plaintext highlighter-rouge">rsp</code> register).</p>
+
+<p>To allocate space for a new activation frame, you just increment this register by the frame-size.
+To free space for an activation frame, you just decrement this register by the frame-size.</p>
+
+<h3 id="the-call-operation">The ‘Call’ Operation</h3>
+
+<p>When a function calls another function, the caller must first prepare itself for suspension.</p>
+
+<p>This ‘suspend’ step typically involves saving to memory any values that are currently held in
+CPU registers so that those values can later be restored if required when the function
+resumes execution. Depending on the calling convention of the function, the caller
+and callee may coordinate on who saves these register values, but you can still think
+of them as being performed as part of the <strong>Call</strong> operation.</p>
+
+<p>The caller also stores the values of any parameters passed to the called function
+into the new activation frame where they can be accessed by the function.</p>
+
+<p>Finally, the caller writes the address of the resumption-point of the caller to
+the new activation frame and transfers execution to the start of the called function.</p>
+
+<p>In the X86/X64 architecture this final operation has its own instruction, the <code class="language-plaintext highlighter-rouge">call</code>
+instruction, that writes the address of the next instruction onto the stack,
+increments the stack register by the size of the address and then jumps to the
+address specified in the instruction’s operand.</p>
+
+<h3 id="the-return-operation">The ‘Return’ Operation</h3>
+
+<p>When a function returns via a <code class="language-plaintext highlighter-rouge">return</code>-statement, the function first stores the return
+value (if any) where the caller can access it. This could either be in the caller’s
+activation frame or the function’s activation frame (the distinction can get a bit blurry
+for parameters and return values that cross the boundary between two activation frames).</p>
+
+<p>Then the function destroys the activation frame by:</p>
+<ul>
+  <li>Destroying any local variables in-scope at the return-point.</li>
+  <li>Destroying any parameter objects</li>
+  <li>Freeing memory used by the activation-frame</li>
+</ul>
+
+<p>And finally, it resumes execution of the caller by:</p>
+<ul>
+  <li>Restoring the activation frame of the caller by setting the stack register
+to point to the activation frame of the caller and restoring any registers
+that might have been clobbered by the function.</li>
+  <li>Jumping to the resume-point of the caller that was stored during the
+‘Call’ operation.</li>
+</ul>
+
+<p>Note that as with the ‘Call’ operation, some calling conventions may split
+the repsonsibilities of the ‘Return’ operation across both the caller and
+callee function’s instructions.</p>
+
+<h2 id="coroutines">Coroutines</h2>
+
+<p>Coroutines generalise the operations of a function by separating out some of the
+steps performed in the <strong>Call</strong> and <strong>Return</strong> operations into three extra operations:
+<strong>Suspend</strong>, <strong>Resume</strong> and <strong>Destroy</strong>.</p>
+
+<p>The <strong>Suspend</strong> operation suspends execution of the coroutine at the current point within the
+function and transfers execution back to the caller or resumer without destroying the
+activation frame. Any objects in-scope at the point of suspension remain alive after the
+coroutine execution is suspended.</p>
+
+<p>Note that, like the <strong>Return</strong> operation of a function, a coroutine can only be suspended
+from within the coroutine itself at well-defined suspend-points.</p>
+
+<p>The <strong>Resume</strong> operation resumes execution of a suspended coroutine at the point at which
+it was suspended. This reactivates the coroutine’s activation frame.</p>
+
+<p>The <strong>Destroy</strong> operation destroys the activation frame without resuming execution of the
+coroutine. Any objects that were in-scope at the suspend point will be destroyed. Memory
+used to store the activation frame is freed.</p>
+
+<h3 id="coroutine-activation-frames">Coroutine activation frames</h3>
+
+<p>Since coroutines can be suspended without destroying the activation frame, we can no
+longer guarantee that activation frame lifetimes will be strictly nested. This
+means that activation frames cannot in general be allocated using a stack data-structure
+and so may need to be stored on the heap instead.</p>
+
+<p>There are some provisions in the C++ Coroutines TS to allow the memory for the
+coroutine frame to be allocated from the activation frame of the caller if the compiler
+can prove that the lifetime of the coroutine is indeed strictly nested within the
+lifetime of the caller. This can avoid heap allocations in many cases provided you have
+a sufficiently smart compiler.</p>
+
+<p>With coroutines there are some parts of the activation frame that need to be preserved
+across coroutine suspension and there are some parts that only need to be kept around
+while the coroutine is executing. For example, the lifetime of a variable with a scope
+that does not span any coroutine suspend-points can potentially be stored on the stack.</p>
+
+<p>You can logically think of the activation frame of a coroutine as being comprised
+of two parts: the ‘coroutine frame’ and the ‘stack frame’.</p>
+
+<p>The ‘coroutine frame’ holds part of the coroutine’s activation frame that persists
+while the coroutine is suspended and the ‘stack frame’ part only exists while the
+coroutine is executing and is freed when the coroutine suspends and transfers
+execution back to the caller/resumer.</p>
+
+<h3 id="the-suspend-operation">The ‘Suspend’ operation</h3>
+
+<p>The <strong>Suspend</strong> operation of a coroutine allows the coroutine to suspend execution
+in the middle of the function and transfer execution back to the caller or resumer
+of the coroutine.</p>
+
+<p>There are certain points within the body of a coroutine that are designated as
+suspend-points. In the C++ Coroutines TS, these suspend-points are identified
+by usages of the <code class="language-plaintext highlighter-rouge">co_await</code> or <code class="language-plaintext highlighter-rouge">co_yield</code> keywords.</p>
+
+<p>When a coroutine hits one of these suspend-points it first prepares the coroutine for
+resumption by:</p>
+<ul>
+  <li>Ensuring any values held in registers are written to the coroutine frame</li>
+  <li>Writing a value to the coroutine frame that indicates which suspend-point the
+coroutine is being suspended at. This allows a subsequent <strong>Resume</strong> operation
+to know where to resume execution of the coroutine or so a subsequent <strong>Destroy</strong>
+to know what values were in-scope and need to be destroyed.</li>
+</ul>
+
+<p>Once the coroutine has been prepared for resumption, the coroutine is considered ‘suspended’.</p>
+
+<p>The coroutine then has the opportunity to execute some additional logic before execution is
+transferred back to the caller/resumer. This additional logic is given access to a handle
+to the coroutine-frame that can be used to later resume or destroy it.</p>
+
+<p>This ability to execute logic after the coroutine enters the ‘suspended’ state allows the
+coroutine to be scheduled for resumption without the need for synchronisation that would
+otherwise be required if the coroutine was scheduled for resumption prior to entering the
+‘suspended’ state due to the potential for suspension and resumption of the coroutine to race.
+I’ll go into this in more detail in future posts.</p>
+
+<p>The coroutine can then choose to either immediately resume/continue execution of the
+coroutine or can choose to transfer execution back to the caller/resumer.</p>
+
+<p>If execution is transferred to the caller/resumer the stack-frame part of the coroutine’s
+activation frame is freed and popped off the stack.</p>
+
+<h3 id="the-resume-operation">The ‘Resume’ operation</h3>
+
+<p>The <strong>Resume</strong> operation can be performed on a coroutine that is currently in the
+‘suspended’ state.</p>
+
+<p>When a function wants to resume a coroutine it needs to effectively ‘call’ into
+the middle of a particular invocation of the function. The way the resumer identifies
+the particular invocation to resume is by calling the <code class="language-plaintext highlighter-rouge">void resume()</code> method on the
+coroutine-frame handle provided to the corresponding <strong>Suspend</strong> operation.</p>
+
+<p>Just like a normal function call, this call to <code class="language-plaintext highlighter-rouge">resume()</code> will allocate a new
+stack-frame and store the return-address of the caller in the stack-frame before
+transferring execution to the function.</p>
+
+<p>However, instead of transferring execution to the start of the function it will
+transfer execution to the point in the function at which it was last suspended.
+It does this by loading the resume-point from the coroutine-frame and jumping
+to that point.</p>
+
+<p>When the coroutine next suspends or runs to completion this call to <code class="language-plaintext highlighter-rouge">resume()</code>
+will return and resume execution of the calling function.</p>
+
+<h3 id="the-destroy-operation">The ‘Destroy’ operation</h3>
+
+<p>The <strong>Destroy</strong> operation destroys the coroutine frame without resuming
+execution of the coroutine.</p>
+
+<p>This operation can only be performed on a suspended coroutine.</p>
+
+<p>The <strong>Destroy</strong> operation acts much like the <strong>Resume</strong> operation in that
+it re-activates the coroutine’s activation frame, including allocating a
+new stack-frame and storing the return-address of the caller of the
+<strong>Destroy</strong> operation.</p>
+
+<p>However, instead of transferring execution to the coroutine body at the
+last suspend-point it instead transfers execution to an alternative code-path
+that calls the destructors of all local variables in-scope at the suspend-point
+before then freeing the memory used by the coroutine frame.</p>
+
+<p>Similar to the <strong>Resume</strong> operation, the <strong>Destroy</strong> operation identifies the
+particular activation-frame to destroy by calling the <code class="language-plaintext highlighter-rouge">void destroy()</code> method
+on the coroutine-frame handle provided during the corresponding <strong>Suspend</strong>
+operation.</p>
+
+<h3 id="the-call-operation-of-a-coroutine">The ‘Call’ operation of a coroutine</h3>
+
+<p>The <strong>Call</strong> operation of a coroutine is much the same as the call operation of a
+normal function. In fact, from the perspective of the caller there is no difference.</p>
+
+<p>However, rather than execution only returning to the caller when the function
+has run to completion, with a coroutine the call operation will instead resume
+execution of the caller when the coroutine reaches its first suspend-point.</p>
+
+<p>When performing the <strong>Call</strong> operation on a coroutine, the caller allocates a
+new stack-frame, writes the parameters to the stack-frame, writes the return-address
+to the stack-frame and transfers execution to the coroutine. This is exactly the
+same as calling a normal function.</p>
+
+<p>The first thing the coroutine does is then allocate a coroutine-frame on the heap
+and copy/move the parameters from the stack-frame into the coroutine-frame so
+that the lifetime of the parameters extends beyond the first suspend-point.</p>
+
+<h3 id="the-return-operation-of-a-coroutine">The ‘Return’ operation of a coroutine</h3>
+
+<p>The <strong>Return</strong> operation of a coroutine is a little different from that of a normal
+function.</p>
+
+<p>When a coroutine executes a <code class="language-plaintext highlighter-rouge">return</code>-statement (<code class="language-plaintext highlighter-rouge">co_return</code> according to the TS)
+operation it stores the return-value somewhere (exactly where this is stored can
+be customised by the coroutine) and then destructs any in-scope local variables
+(but not parameters).</p>
+
+<p>The coroutine then has the opportunity to execute some additional logic before
+transferring execution back to the caller/resumer.</p>
+
+<p>This additional logic might perform some operation to publish the return value,
+or it might resume another coroutine that was waiting for the result. It’s
+completely customisable.</p>
+
+<p>The coroutine then performs either a <strong>Suspend</strong> operation (keeping the
+coroutine-frame alive) or a <strong>Destroy</strong> operation (destroying the coroutine-frame).</p>
+
+<p>Execution is then transferred back to the caller/resumer as per the <strong>Suspend</strong>/<strong>Destroy</strong>
+operation semantics, popping the stack-frame component of the activation-frame
+off the stack.</p>
+
+<p>It is important to note that the return-value passed to the <strong>Return</strong> operation is
+not the same as the return-value returned from a <strong>Call</strong> operation as the return
+operation may be executed long after the caller resumed from the initial <strong>Call</strong>
+operation.</p>
+
+<h2 id="an-illustration">An illustration</h2>
+
+<p>To help put these concepts into pictures, I want to walk through a simple
+example of what happens when a coroutine is called, suspends and is later
+resumed.</p>
+
+<p>So let’s say we have a function (or coroutine), <code class="language-plaintext highlighter-rouge">f()</code> that calls a coroutine, <code class="language-plaintext highlighter-rouge">x(int a)</code>.</p>
+
+<p>Before the call we have a situation that looks a bit like this:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>STACK                     REGISTERS               HEAP
+
+                          +------+
++---------------+ &lt;------ | rsp  |
+|  f()          |         +------+
++---------------+
+| ...           |
+|               |
+</code></pre></div></div>
+
+<p>Then when <code class="language-plaintext highlighter-rouge">x(42)</code> is called, it first creates a stack frame for <code class="language-plaintext highlighter-rouge">x()</code>, as with normal functions.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>STACK                     REGISTERS               HEAP
++----------------+ &lt;-+
+|  x()           |   |
+| a  = 42        |   |
+| ret= f()+0x123 |   |    +------+
++----------------+   +--- | rsp  |
+|  f()           |        +------+
++----------------+
+| ...            |
+|                |
+</code></pre></div></div>
+
+<p>Then, once the coroutine <code class="language-plaintext highlighter-rouge">x()</code> has allocated memory for the coroutine frame on the heap
+and copied/moved parameter values into the coroutine frame we’ll end up with something
+that looks like the next diagram. Note that the compiler will typically hold the address
+of the coroutine frame in a separate register to the stack pointer (eg. MSVC stores this
+in the <code class="language-plaintext highlighter-rouge">rbp</code> register).</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>STACK                     REGISTERS               HEAP
++----------------+ &lt;-+
+|  x()           |   |
+| a  = 42        |   |                   +--&gt;  +-----------+
+| ret= f()+0x123 |   |    +------+       |     |  x()      |
++----------------+   +--- | rsp  |       |     | a =  42   |
+|  f()           |        +------+       |     +-----------+
++----------------+        | rbp  | ------+
+| ...            |        +------+
+|                |
+</code></pre></div></div>
+
+<p>If the coroutine <code class="language-plaintext highlighter-rouge">x()</code> then calls another normal function <code class="language-plaintext highlighter-rouge">g()</code> it will look something like
+this.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>STACK                     REGISTERS               HEAP
++----------------+ &lt;-+
+|  g()           |   |
+| ret= x()+0x45  |   |
++----------------+   |
+|  x()           |   |
+| coroframe      | --|-------------------+
+| a  = 42        |   |                   +--&gt;  +-----------+
+| ret= f()+0x123 |   |    +------+             |  x()      |
++----------------+   +--- | rsp  |             | a =  42   |
+|  f()           |        +------+             +-----------+
++----------------+        | rbp  |
+| ...            |        +------+
+|                |
+</code></pre></div></div>
+
+<p>When <code class="language-plaintext highlighter-rouge">g()</code> returns it will destroy its activation frame and restore <code class="language-plaintext highlighter-rouge">x()</code>’s activation frame.
+Let’s say we save <code class="language-plaintext highlighter-rouge">g()</code>’s return value in a local variable <code class="language-plaintext highlighter-rouge">b</code> which is stored in the coroutine
+frame.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>STACK                     REGISTERS               HEAP
++----------------+ &lt;-+
+|  x()           |   |
+| a  = 42        |   |                   +--&gt;  +-----------+
+| ret= f()+0x123 |   |    +------+       |     |  x()      |
++----------------+   +--- | rsp  |       |     | a =  42   |
+|  f()           |        +------+       |     | b = 789   |
++----------------+        | rbp  | ------+     +-----------+
+| ...            |        +------+
+|                |
+</code></pre></div></div>
+
+<p>If <code class="language-plaintext highlighter-rouge">x()</code> now hits a suspend-point and suspends execution without destroying its
+activation frame then execution returns to <code class="language-plaintext highlighter-rouge">f()</code>.</p>
+
+<p>This results in the stack-frame part of <code class="language-plaintext highlighter-rouge">x()</code> being popped off the stack while
+leaving the coroutine-frame on the heap. When the coroutine suspends for the
+first time, a return-value is returned to the caller. This return value often
+holds a handle to the coroutine-frame that suspended that can be used to later
+resume it.
+When <code class="language-plaintext highlighter-rouge">x()</code> suspends it also stores the address of the resumption-point of <code class="language-plaintext highlighter-rouge">x()</code>
+in the coroutine frame (call it <code class="language-plaintext highlighter-rouge">RP</code> for resume-point).</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>STACK                     REGISTERS               HEAP
+                                        +----&gt; +-----------+
+                          +------+      |      |  x()      |
++----------------+ &lt;----- | rsp  |      |      | a =  42   |
+|  f()           |        +------+      |      | b = 789   |
+| handle     ----|---+    | rbp  |      |      | RP=x()+99 |
+| ...            |   |    +------+      |      +-----------+
+|                |   |                  |
+|                |   +------------------+
+</code></pre></div></div>
+
+<p>This handle may now be passed around as a normal value between functions.
+At some point later, potentially from a different call-stack or even on a different
+thread, something (say, <code class="language-plaintext highlighter-rouge">h()</code>) will decide to resume execution of that coroutine.
+For example, when an async I/O operation completes.</p>
+
+<p>The function that resumes the coroutine calls a <code class="language-plaintext highlighter-rouge">void resume(handle)</code> function
+to resume execution of the coroutine. To the caller, this looks just like any other
+normal call to a <code class="language-plaintext highlighter-rouge">void</code>-returning function with a single argument.</p>
+
+<p>This creates a new stack-frame that records the return-address of the caller to
+<code class="language-plaintext highlighter-rouge">resume()</code>, activates the coroutine-frame by loading its address into a register
+and resumes execution of <code class="language-plaintext highlighter-rouge">x()</code> at the resume-point stored in the coroutine-frame.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>STACK                     REGISTERS               HEAP
++----------------+ &lt;-+
+|  x()           |   |                   +--&gt;  +-----------+
+| ret= h()+0x87  |   |    +------+       |     |  x()      |
++----------------+   +--- | rsp  |       |     | a =  42   |
+|  h()           |        +------+       |     | b = 789   |
+| handle         |        | rbp  | ------+     +-----------+
++----------------+        +------+
+| ...            |
+|                |
+</code></pre></div></div>
+
+<h2 id="in-summary">In summary</h2>
+
+<p>I have described coroutines as being a generalisation of a function that has
+three additional operations - ‘Suspend’, ‘Resume’ and ‘Destroy’ - in addition
+to the ‘Call’ and ‘Return’ operations provided by “normal” functions.</p>
+
+<p>I hope that this provides some useful mental framing for how to think of
+coroutines and their control-flow.</p>
+
+<p>In the next post I will go through the mechanics of the C++ Coroutines TS
+language extensions and explain how the compiler translates code that you
+write into coroutines.</p>
+
+  </div>
+
+  
+  <footer class="post-footer">
+    <div class="post-comments">
+      <hr/>
+      <h3>Comments</h3>
+      <p>
+        Comments are welcome in <a href="https://github.com/lewissbaker/lewissbaker.github.io/issues/1">this GitHub issue</a>
+      </p>
+    </div>
+  </footer>
+  
+
+  
+</article>
+
+      </div>
+    </main><footer class="site-footer h-card">
+  <data class="u-url" href="/"></data>
+
+  <div class="wrapper">
+
+    <h2 class="footer-heading">Asymmetric Transfer</h2>
+
+    <div class="footer-col-wrapper">
+      <div class="footer-col footer-col-1">
+        <ul class="contact-list">
+          <li class="p-name">Lewis Baker</li></ul>
+      </div>
+
+      <div class="footer-col footer-col-2"><ul class="social-media-list"><li><a href="https://github.com/lewissbaker"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#github"></use></svg> <span class="username">lewissbaker</span></a></li><li><a href="https://www.twitter.com/lewissbaker"><svg class="svg-icon"><use xlink:href="/assets/minima-social-icons.svg#twitter"></use></svg> <span class="username">lewissbaker</span></a></li></ul>
+</div>
+
+      <div class="footer-col footer-col-3">
+        <p>Some thoughts on programming, C++ and other things.
+</p>
+      </div>
+    </div>
+
+  </div>
+
+</footer>
+</body>
+
+</html>

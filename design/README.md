@@ -2,7 +2,11 @@
 
 ## Important considerations
 
-### Handling of blocking
+### Blocking
+
+### Browser / WASM
+
+- Should be compilable to WASM
 
 ### Cancellation
 
@@ -19,9 +23,15 @@
 - What does debugging look like?
 - How does it compare to closure iterator or async stack traces?
 
-### Embedded
+### Embedded / No alloc environment
 
 - Is there a subset or primitives that can be used in embedded?
+- Can it make state machines easier to implement?
+
+Target use cases are:
+- Embedded where no alloc is possible
+- Kernel development where no alloc is possible (or very strongly discouraged)
+- Schedulers, memory managers which are already overhead.
 
 ### Globals
 
@@ -74,10 +84,24 @@ Also we might not want to tag the function but introduce CPS block instead?
 > the programmer the “stack ripping” phenomenon that occurs when translating threads to
 > events, it fails to preserve the illusion of an unaltered stack when these functions are involved.
 
+Also pretty sure you can't use {.thread.} variable in a coroutine (but that's true also for something distributed on a threadpool)
 
 ### Overhead
 
-- Allocations, custom allocator
+- Overhead of call/resume vs a function call?
+- Allocations, custom allocator, stack alloc if possible
+
+It would be very beneficial to have a way to do heap allocation elision
+- https://irclogs.nim-lang.org/17-12-2020.html#07:42:52 and https://irclogs.nim-lang.org/17-12-2020.html#09:14:17
+- https://irclogs.nim-lang.org/19-12-2020.html#13:34:14
+- https://reviews.llvm.org/D23245
+- https://github.com/status-im/nim-chronos/issues/2#issue-327470294
+- C++ request https://www.reddit.com/r/cpp/comments/3p3uva/cppcon_2015_gor_nishanov_c_coroutines_a_negative/cw542gx/
+
+Zero-alloc coroutines can allow building high-performance libraries
+by using memory and IO latency-hinding techniques:
+- CoroBase: https://arxiv.org/pdf/2010.15981.pdf
+- https://github.com/sfu-dis/corobase
 
 ## Scheduler agnostic
 
