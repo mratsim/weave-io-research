@@ -20,6 +20,8 @@ Alternatively this post in the Python mailing list from 1999 is also a good expl
   - Continuation-Passing C Compiling threads to events through continuations, https://www.irif.fr/~jch/research/cpc-2012.pdf
   - Discussion: http://lambda-the-ultimate.org/node/4157
   - Manual: https://github.com/kerneis/cpc/tree/develop/doc
+- Continuations in C: https://web.archive.org/web/20100106212446/http://homepage.mac.com/sigfpe/Computing/continuations.html
+- Continuations in Cee: https://wiki.c2.com/?ContinuationsInCee
 
 - F#: Implementing coroutines (async/await) with continuations: https://gist.github.com/mrange/147fe94da28fbb237af4e9bd39da4ad3
 - Kotlin coroutines: https://github.com/Kotlin/KEEP/blob/31bb8af/proposals/coroutines.md
@@ -60,6 +62,11 @@ _Note from experience in eager execution vs delayed execution of compute graph i
 _Note 2: Rust seems to have come to the same conclusion. Rust features are delayed until they are polled_
 
 ## Languages write up
+
+## Continuations in C
+
+- Continuations in C: https://web.archive.org/web/20100106212446/http://homepage.mac.com/sigfpe/Computing/continuations.html
+- Continuations in Cee: https://wiki.c2.com/?ContinuationsInCee
 
 ### Concurrent ML and Guile
 

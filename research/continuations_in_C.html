@@ -1,0 +1,271 @@
+<html>
+  <head>
+    <title></title>
+    <meta content="">
+    <style></style>
+  </head>
+  <body>
+<h1>Continuations in C</h1>
+The language scheme has an interesting feature: the
+<tt>call/cc</tt> <a href="#4">[4]</a>
+ function, otherwise
+known as <em>call with current continuation</em>.
+<p>
+A continuation is essentially the state of a process at any moment in time. At
+any point during execution you can think of it as an extra hidden argument that's
+always implicitly referred to in your code. We take it for granted that the current
+state of an executing system is available for our use and so we usually aren't
+aware it's there at all.
+<p>
+<tt>call/cc</tt> makes it explicit. The current
+state of execution can be grabbed and wrapped up as a first class object and
+it can be reused elsewhere. It's great for implementing things like coroutines
+where, in effect, you want to flip back and forth between different continuations.
+<p>
+If you read about continuations and it's sometimes pointed out that there is a crude form
+of <tt>call/cc</tt> in C, <tt>setjmp()</tt> and <tt>longjmp()</tt>.
+In a sense <tt>setjmp()</tt> saves the current state
+of the machine and <tt>longjmp()</tt> carries on from where you left off. But you can't
+use <tt>longjmp()</tt> to jump back into a function you've already come from. <tt>longjmp()</tt> can
+only unwind the stack and so you must return further up the call chain. This makes
+it good for handling exceptions but not for the cool stuff that call/cc can do.
+<p>
+It <em>is</em> possible to simulate <tt>call/cc</tt>, or something like it, on Unix systems
+with system calls like <tt>fork()</tt> that literally duplicate the running process.
+<p>
+But actually there's a way of doing this in C.
+<p>
+Rather than implement something exactly like <tt>call/cc</tt> I've implemented one
+of the things <em>call/cc</em> is good for: backtracking. In logic programming
+languages like Prolog it is possible to reach a point in code execution at which it
+is no longer possible to proceed. At this point the interpreter backtracks to a suitable
+point and then carries on from where it left off with something changed. This is great for
+doing exhaustive searches in combinatorial optimization and theorem proving.
+<p>
+In the following code I have used a continuation in C to implement non-deterministic
+code. Essentially it's a way of setting points to which execution can backtrack
+should one avenue of execution fail - like in Prolog. In a way you can think of
+C code written with backtracking as <em>declarative</em> rather than <em>imperative</em>.
+<p>
+First let's look at how the code is used:
+<p>
+
+<blockquote>
+<table width="75%">
+<tr>
+<td bgcolor="#CCFFFF">
+<pre><tt>
+/*
+ * integer(m,n) returns an integer from m to n inclusive.
+ * You can view i = integer(m,n) as the assertion
+ * m&lt;=i&lt;=n.
+ */
+int integer(int m,int n) {
+	int i;
+
+	for (i = m; i&lt;=n; ++i) {
+		TRY(i);
+	}
+
+	FAIL;
+}
+
+/*
+ * Solve this problem:
+ * 2&lt;=i&lt;=100 and
+ * 2&lt;=j&lt;=i and
+ * i*j==481.
+ * In other words factorise 481.
+ */
+int my_main() {
+	int i,j;
+
+	i = integer(2,100);
+	j = integer(2,i);
+
+	if (i*j!=481) {
+		/*
+		 * If they don't factor 481 then
+		 * backtrack.
+		 */
+		FAIL;
+	}
+
+	printf("%d %d\n",i,j);
+}
+</tt></pre>
+</td>
+</tr>
+</table>
+</blockquote>
+<p>
+
+<tt>integer(m,n)</tt> is a function that returns an integer from m to n inclusive. The first time it
+returns m using <tt>TRY()</tt>. <tt>TRY()</tt> makes a trial return of its argument. If this
+return value causes a <tt>FAIL</tt> later then execution backtracks to this point. In this
+case the loop continues and tries m+1 next.
+<tt>integer()</tt> is used twice in the code. If the second one fails all the way up to n then it backtracks to
+the previous one. In this way it carries out an exhaustive search to factorise 481.
+Another way of looking at this is to view <tt>integer()</tt> as a coroutine and <tt>FAIL</tt>
+as the command that transfers execution back to the last coroutine that carried out a <tt>TRY()</tt>.
+
+<p>
+Here are the implementations of TRY() and FAIL:
+<p>
+
+<blockquote>
+<table width="75%">
+<tr>
+<td bgcolor="#CCFFFF">
+<pre><tt>
+#include &lt;stdio.h&gt;
+#include &lt;setjmp.h&gt;
+
+long *pbos;
+
+/*
+ * Continuation datastructure.
+ */
+typedef struct cont {
+	jmp_buf registers;
+	int n;
+	long *stack;
+	/*
+	 * Pointer to next continuation in chain.
+	 */
+	struct cont *next;
+} cont;
+
+void save_stack(cont *c,long *pbos,long *ptos) {
+	int n = pbos-ptos;
+	int i;
+
+	c-&gt;stack = (long *)malloc(n*sizeof(long));
+	c-&gt;n = n;
+	for (i = 0; i&lt;n; ++i) {
+		c-&gt;stack[i] = pbos[-i];
+	}
+}
+
+cont *getcontext() {
+	cont *c = (cont *)malloc(sizeof(cont));
+	long tos;
+	/*
+	 * Save registers
+	 */
+	if (!setjmp(c-&gt;registers)) {
+		/*
+		 * Save stack
+		 */
+		save_stack(c,pbos,&tos;);
+
+		return c;
+	} else {
+		return 0;
+	}
+}
+
+cont *gcont = 0;
+
+/*
+ * Save current continuation.
+ */
+int save_context() {
+	cont *c = getcontext();
+	if (c) {
+		c-&gt;next = gcont;
+		gcont = c;
+		return 0;
+	} else {
+		return 1;
+	}
+}
+
+void restore_stack(cont *c,int once_more) {
+  long padding[12];
+	long tos;
+	int i,n;
+	/*
+	 * Make sure there's enough room on the stack
+	 */
+	if (pbos-c-&gt;n&lt;&tos;) {
+		restore_stack(c,1);
+	}
+
+	if (once_more) {
+		restore_stack(c,0);
+	}
+
+	/*
+	 * Copy stack back out from continuation
+	 */
+	n = c-&gt;n;
+	for (i = 0; i&lt;n; ++i) {
+		pbos[-i] = c-&gt;stack[i];
+	}
+	longjmp(c-&gt;registers,1);
+}
+
+void exec_context(cont *c) {
+	/*
+	 * Restore stack
+	 */
+	restore_stack(c,1);
+}
+
+/*
+ * Restore last continuation.
+ */
+void restore_context() {
+	if (gcont) {
+		cont *old = gcont;
+		gcont = old-&gt;next;
+		exec_context(old);
+	} else {
+		exit(1);
+	}
+}
+
+int my_main();
+
+int main() {
+	long bos;
+	pbos = &bos;
+
+	my_main();
+}
+
+#define FAIL restore_context()
+#define TRY(i) if (!save_context()) { return i; }
+</tt></pre>
+</td>
+</tr>
+</table>
+</blockquote>
+
+<p>
+
+In order to save a continuation two things need to be grabbed: the state of all
+registers and the state of the C stack. <tt>setjmp()</tt> and <tt>longjmp()</tt> provide
+a mechanism for saving and restoring the registers. The stack is saved by getting our
+hands dirty and simply copying it out. It's extent in memory is found by taking the
+address of variables at the top and bottom of the stack. Unfortunately this isn't
+100% portable, and is definitely against the rules. But the code above compiles under
+Linux, MacOS X, Win32, MSDOS, Irix and probably many other platforms.
+
+Incidentally, if you're trying to implement an interpreter for a language with
+continuations in C then one approach is to implement continuations in C. This is
+what Aubrey Jaffer did in his Scheme interpreter. If you don't want the stack of
+the language you're interpreting to be bound up with the C stack then you can
+implement something like Stackless Python <a href="#1">[1]</a>. In fact the example I give above is
+similar to the generator example given in [1].
+
+
+<h1>References</h1>
+<a name="1">[1]</a> <a href="https://web.archive.org/web/20090206042150/http://www.stackless.com/spcpaper.htm">Continuations and Stackless Python</a><br>
+[2] <a href="https://web.archive.org/web/20090206042150/http://www.swiss.ai.mit.edu/~jaffer/SCM.html">SCM</a>, a scheme implementation<br>
+[3] <a href="https://web.archive.org/web/20090206042150/http://www.ps.uni-sb.de/~duchier/python/continuations.html">Continuations Made Simple and Illustrated</a><br>
+<a name="4">[4]</a> <a href="https://web.archive.org/web/20090206042150/http://www.eleves.ens.fr:8080/home/madore/computers/callcc.html">A Page About <em>call/cc</em></a><br>
+</ol>
+  </body>
+</html>
