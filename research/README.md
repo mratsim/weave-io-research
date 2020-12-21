@@ -2,6 +2,15 @@
 
 This collects research on continuation-passing style, async/await, coroutines
 
+## Introduction to suspendable/resumable functions
+
+React 16 uses coroutines, fibers, continuations and so a lot
+of Javascript developers have to learn that stuff:
+- https://www.yld.io/blog/continuations-coroutines-fibers-effects/
+
+Alternatively this post in the Python mailing list from 1999 is also a good explainer:
+- https://mail.python.org/pipermail/python-dev/1999-July/000467.html
+
 ## Included in repo
 
 - Continuation Passing for C:
@@ -12,7 +21,9 @@ This collects research on continuation-passing style, async/await, coroutines
   - Discussion: http://lambda-the-ultimate.org/node/4157
   - Manual: https://github.com/kerneis/cpc/tree/develop/doc
 
+- F#: Implementing coroutines (async/await) with continuations: https://gist.github.com/mrange/147fe94da28fbb237af4e9bd39da4ad3
 - Kotlin coroutines: https://github.com/Kotlin/KEEP/blob/31bb8af/proposals/coroutines.md
+- Python mailing list on fake threads (coroutines, continuations, generators): https://mail.python.org/pipermail/python-dev/1999-July/000467.html
 - Rust async/await interface challenge - Matthias247: https://gist.github.com/Matthias247/5e5e7430149bbb04eebf18cf31747fe0
 - Rust async/await cancellation challenge - Matthias247: https://gist.github.com/Matthias247/ffc0f189742abf6aa41a226fe07398a8
 - Swift async proposal - lattner: https://gist.github.com/lattner/429b9070918248274f25b714dcfc7619
@@ -55,6 +66,11 @@ _Note 2: Rust seems to have come to the same conclusion. Rust features are delay
 - https://wingolog.org/archives/2017/06/29/a-new-concurrent-ml
 - https://github.com/wingo/fibers
 
+### F# continuations
+
+- F#: Implementing coroutines (async/await) with continuations:\
+  https://gist.github.com/mrange/147fe94da28fbb237af4e9bd39da4ad3
+
 ### Kotlin coroutines
 
 - https://github.com/Kotlin/KEEP/blob/31bb8af/proposals/coroutines.md
@@ -73,6 +89,10 @@ Talks:
 - https://spin.atomicobject.com/2013/07/01/lua-coroutines/
 - Scheduler example: https://gist.github.com/Deco/1818054
 
+### Javascript React Fiber
+
+- https://www.yld.io/blog/continuations-coroutines-fibers-effects/
+
 ### Ocaml Async
 
 - https://dev.realworldocaml.org/concurrent-programming.html
@@ -80,6 +100,8 @@ Talks:
 Note: OCaml optimizes chain of Deferred in tail call (i.e. async tail call optimization)
 
 ### Python Greenlet, Stacklet, Continulet, Fibers
+
+- Python mailing list on fake threads (coroutines, continuations, generators): https://mail.python.org/pipermail/python-dev/1999-July/000467.html
 
 - https://greenlet.readthedocs.io/en/latest/
 - Nim: https://github.com/treeform/greenlet
@@ -153,6 +175,12 @@ Swift would build async/await on top of coroutines abstraction
 
 ## Academic research
 
+### Continuations
+
+- The Discoveries of Continuations,
+  John Reynolds\
+  https://www.cs.tufts.edu/~nr/cs257/archive/john-reynolds/histcont.pdf
+
 ### Coroutines
 
 - Coroutines in Lua\
@@ -161,6 +189,12 @@ Swift would build async/await on top of coroutines abstraction
 - Revisiting Coroutines\
   Ana Lùcia de Moura and Roberto Ierusalimschy, 2004\
   http://citeseer.ist.psu.edu/viewdoc/download;jsessionid=DE49740527F844892BF3C426FA2E8ED3?doi=10.1.1.58.4017&rep=rep1&type=pdf
+- Yield: Mainstream Delimited Continuations\
+  Roshan P. James, Amr Sabry, 2011\
+  http://parametricity.net/dropbox/yield.subc.pdf
+
+The yield paper proved that `yield` as used in programming language
+is equivalent to `shift` and `reset` used to build delimited continuations.
 
 ## Wikipedia - related concepts
 

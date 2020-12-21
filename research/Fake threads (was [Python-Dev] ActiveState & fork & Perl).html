@@ -1,0 +1,333 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+ <HEAD>
+   <TITLE> Fake threads (was [Python-Dev] ActiveState &amp; fork &amp; Perl)
+   </TITLE>
+   <LINK REL="Index" HREF="index.html" >
+   <LINK REL="made" HREF="mailto:tim_one%40email.msn.com">
+   <META NAME="robots" CONTENT="index,nofollow">
+   
+   <LINK REL="Previous"  HREF="000463.html">
+   <LINK REL="Next"  HREF="000468.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>Fake threads (was [Python-Dev] ActiveState &amp; fork &amp; Perl)
+   </H1>
+    <B>Tim Peters
+    </B> 
+    <A HREF="mailto:tim_one%40email.msn.com"
+       TITLE="Fake threads (was [Python-Dev] ActiveState &amp; fork &amp; Perl)">tim_one@email.msn.com
+       </A><BR>
+    <I>Mon, 5 Jul 1999 02:55:02 -0400</I>
+    <P><UL>
+        <LI> Previous message: <A HREF="000463.html">Fake threads (was [Python-Dev] ActiveState &amp; fork &amp; Perl)
+</A></li>
+        <LI> Next message: <A HREF="000468.html">Fake threads (was [Python-Dev] ActiveState &amp; fork &amp; Perl)
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#467">[ date ]</a>
+              <a href="thread.html#467">[ thread ]</a>
+              <a href="subject.html#467">[ subject ]</a>
+              <a href="author.html#467">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>[Gordon]
+&gt;<i> I beg enlightenment from someone more familiar with these
+</I>&gt;<i> high-falutin' concepts. Would the following characterization be
+</I>&gt;<i> accurate?
+</I>&gt;<i>
+</I>&gt;<i> All these beasts (continuations, coroutines, generators) involve the
+</I>&gt;<i> idea of &quot;resumable&quot;, but:
+</I>&gt;<i>
+</I>&gt;<i>  A generator's state is wholly self-contained
+</I>&gt;<i>  A coroutines's state is not necessarily self-contained but it is
+</I>&gt;<i> stable
+</I>&gt;<i>  Continuations may have volatile state.
+</I>&gt;<i>
+</I>&gt;<i> Is this right, wrong, necessary, sufficient...??
+</I>&gt;<i>
+</I>&gt;<i> goto-beginning-to-look-attractive-ly y'rs
+</I>
+&quot;goto&quot; is deliciously ironic, for a reason to become clear &lt;wink&gt;.
+
+Here's my biased short course.
+
+NOW
+
+First, I have the feeling most people would panic if we simply described
+Python's current subroutine mechanism under a new name &lt;0.9 wink&gt;.  I'll
+risk that.  When Python makes a call, it allocates a frame object.  Attached
+to the frame is the info everyone takes for granted so thinks is &quot;simple &amp;
+obvious&quot; &lt;wink&gt;.  Chiefly,
+
+    &quot;the locals&quot; (name -&gt; object bindings)
+    a little evaluation stack for holding temps and dynamic
+        block-nesting info
+    the offset to the current bytecode instruction, relative to the
+        start of the code object's fixed (immutable) bytecode vector
+
+When a subroutine returns, it decrefs the frame and then the frame typically
+goes away; if it returns because of an exception, though, traceback objects
+may keep the frame alive.
+
+GENERATORS
+
+Generators add two new abstract operations, &quot;suspend&quot; and &quot;resume&quot;.  When a
+generator suspends, it's exactly like a return today except we simply
+decline to decref the frame.  That's it!  The locals, and where we are in
+the computation, aren't thrown away.  A &quot;resume&quot; then consists of
+*re*starting the frame at its next bytecode instruction, with the retained
+frame's locals and eval stack just as they were.
+
+Some generator properties:
+
++ In implementation terms a trivial variation on what Python currently does.
+
++ They're asymmetric:  &quot;suspend&quot; is something only a generator can do, and
+&quot;resume&quot; something only its caller can do (this does not preclude a
+generator from being &quot;the caller&quot; wrt to some other generator, though, and
+indeed that's very useful in practice).
+
++ A generator always returns control directly to its caller, at the point
+the caller invoked the generator.  And upon resumption, a generator always
+picks up where it left off.
+
++ Because a generator remembers where it is and what its locals are, its
+state and &quot;what to do next&quot; don't have to be encoded in global data
+structures then decoded from scratch upon entry.  That is, whenever you
+build a little (or large!) state machine to figure out &quot;what to do next&quot;
+from a collection of persistent flags and state vrbls, chances are good
+there's a simple algorithm dying to break free of that clutter &lt;wink&gt;.
+
+COROUTINES
+
+Coroutines add only one new abstract operation, &quot;transfer&quot;.  They're fully
+symmetric so can get away with only one.  &quot;transfer&quot; names a coroutine to
+transfer to, and gives a value to deliver to it (there are variations, but
+this one is common &amp; most useful).  When A transfers to B, it acts like a
+generator &quot;suspend&quot; wrt A and like a generator &quot;resume&quot; wrt B.  So A
+remembers where it is, and what its locals etc are, and B gets restarted
+from the point *it* last transfered to someone else.
+
+Coroutines grew up in simulation languages because they're an achingly
+natural way to model independent objects that interact with feedback.  There
+each object (which may itself be a complex system of other stuff) is written
+as an infinite loop, transferring control to other objects when it has
+something to tell them, and transferred to by other objects when they have
+something to tell it.
+
+A Unix pipeline &quot;A | B | C | D&quot; doesn't exploit the full power but is
+suggestive.  A may be written as
+
+while 1:
+    x = compute my next output
+    B.transfer(x)     # resume B with my output
+
+B as
+
+while 1:
+    x = A.transfer()  # resume A to get my input
+    y = compute something from x and my own history
+    C.transfer(y)     # resume C with my output
+
+C as
+
+while 1:
+    x = B.transfer()  # resume B to get my input
+    y = compute something from x and my own history
+    D.transfer(y)     # resume D with my output
+
+and D as
+
+while 1:
+    x = C.transfer()  # resume C to get my input
+    y = compute something from x and my own history
+    print y
+
+If e.g. C collapses pairs of values from B, it can be written instead as
+
+while 1:
+    # get a pair of B's
+    x = B.transfer()
+    y = B.transfer()
+    z = f(x, y, whatever)
+    D.transfer(z)     # resume D with my output
+
+It's a local modification to C:  B doesn't know and shouldn't need to know.
+This keeps complex algorithms manageable as things evolve.
+
+Initialization and shutdown can be delicate, but once the pipe is set up it
+doesn't even matter which of {A, B, C, D} first gets control!  You can view
+A as pushing results through the pipe, or D as pulling them, or whatever.
+In reality they're all equal partners.
+
+Why these are so much harder to implement than generators:  &quot;transfer&quot;
+*names* who next gets control, while generators always return to their
+(unnamed) caller.  So a generator simply &quot;pops the stack&quot; when it suspends,
+while coroutine flow need not  be (and typically isn't) stack-like.
+
+In Python this is currently a coroutine-killer, because the C stack gets
+intertwined.  So if coroutine A merely calls (in the regular sense) function
+F, and F tries to transfer to coroutine B, the info needed to resume A
+includes the chunk of the C stack between A and F.  And that's why the
+Python coroutine implementation I referenced earlier uses threads under the
+covers (where capturing pieces of the C stack isn't a problem).
+
+Early versions of coroutines didn't allow for this, though!  At first
+coroutines could only transfer *directly* to other coroutines, and as soon
+as a coroutine made &quot;a regular call&quot; transfers were prohibited until the
+call returned (unless the called function kicked off a brand new collection
+of coroutines, which could then transfer among themselves -- making the
+distinction leads to convoluted rules, so modern practice is to generalize
+from the start).
+
+Then the current state of each coroutine was contained in a single frame,
+and it's really no harder to implement than generators.  Knuth seems to have
+this restricted flavor of coroutine in mind when he describes generator
+behavior as &quot;semi-coroutine&quot;.
+
+CONTINUATIONS
+
+Given the pedagogical structure so far, you're primed to view continuations
+as an enhancement of coroutines.  And that's exactly what will get you
+nowhere &lt;wink&gt;.  Continuations aren't more elaborate than coroutines,
+they're simpler.  Indeed, they're simpler than generators, and even simpler
+than &quot;a regular call&quot;!  That's what makes them so confusing at first:
+they're a different *basis* for *all* call-like behavior.  Generators and
+coroutines are variations on what you already know; continuations challenge
+your fundamental view of the universe.
+
+Legend has it they were discovered when theorists were trying to find a
+solid reason for why goto statements suck:  the growth of &quot;denotational
+semantics&quot; (DS) boomed at the same time &quot;structured programming&quot; took off.
+The former is a solid &amp; fruitful approach to formally specifying the
+semantics of programming languages, built on the lambda calculus (and so
+dear to the Lisp/Scheme community -- this all ties together, of course
+&lt;wink&gt;).
+
+The early hope was that goto statements would prove to present intractable
+problems for formal specification, and then &quot;that's why they suck:  we can't
+even sort them out on paper, let alone in practice&quot;.
+
+But in one of God's cleverer tricks on the programming world &lt;tee hee&gt;, the
+semantics of goto turned out to be trivial:  at a branch point, you can go
+one of two ways.  Represent one of those ways by a function f that computes
+what happens if you branch one way, and the other way by a function g.  Then
+an if+goto simply picks one of f or g as &quot;the continuation&quot; of the program,
+depending on whether the &quot;if&quot; condition is true or false.  And a plain goto
+simply replaces the current continuation with a different one (representing
+what happens at the branch target) unconditionally.  So goto turned out to
+be simpler (from the DS view) than even an assignment stmt!
+
+I've often suspected theorists were *surprised* (and maybe appalled &lt;0.7
+wink&gt;) when the language folks went on to *implement* the continuation idea.
+Don't really know, but suppose it doesn't matter anyway.  The fact is we're
+stuck with them now &lt;wink&gt;.
+
+In theory a continuation is a function that computes &quot;the rest of the
+program&quot;, or &quot;its future&quot;.  And it really is like a supercharged goto!  It's
+the formal DS basis for all control flow, from goto stmts to exception
+handling, subsuming vanilla call flow, recursion, generators, coroutines,
+backtracking, and even loops along the way.
+
+To a certain frame of mind (like Sam's, and Christian is temporarily under
+his evil influence &lt;wink&gt;), this relentless uniformity &amp; consistency of
+approach is very appealing.  Guido tends to like his implementations to
+mirror his surface semantics, though, and if he has ten constructs they're
+likely to be implemented ten ways.  View that as a preview of future battles
+that have barely been hinted at so far &lt;0.3 wink&gt;.
+
+Anyway, in implementation terms a continuation &quot;is like&quot; what a coroutine
+would be if you could capture its resumption state at any point (even
+without the coroutine's knowledge!) and assign that state to a vrbl.  So we
+could say it adds an abstract operation &quot;capture&quot;, which essentially
+captures the program counter, call stack, and local (in Python terms) &quot;block
+stack&quot; at its point of invocation, and packages all that into a first-class
+&quot;continuation object&quot;.  IOW, a building block on top of which a generator's
+suspend, and the suspend half of a coroutine transfer, can be built.  In a
+pure vision, there's no difference at all between a regular return and the
+&quot;resume&quot; half of a coroutine transfer:  both amount to no more than picking
+some continuation to evaluate next.
+
+A continuation can be captured anywhere (even in the middle of an
+expression), and any continuation can be invoked at will from anywhere else.
+Note that &quot;invoking a continuation&quot; is *not* like &quot;a call&quot;, though:  it's
+abandoning the current continuation, *replacing* it with another one.  In
+formal DS this isn't formally true (it's still &quot;a call&quot; -- a function
+application), but in practice it's a call that never returns to its caller
+so the implementation takes a shortcut.
+
+Like a goto, this is as low-level as it gets, and even hard-core
+continuation fans don't use them directly except as a means to implement
+better-behaved abstractions.
+
+As to whether continuations have &quot;volatile state&quot;, I'm not sure what that
+was asking.  If a given continuation is invoked more than once (which is
+something that's deliberately done when e.g. implementing backtracking
+searches), then changes made to the locals by the first invocation are
+visible to the second (&amp; so on), so maybe &lt;wink&gt; the answer is &quot;yes&quot;.  It's
+more accurate to think of a continuation as being immutable, though:  it
+holds a reference to the structure that implements name bindings, but does
+not copy (save or restore) the bindings.
+
+Quick example, given:
+
+(define continuation 0)
+
+(define (test)
+  (let ((i 0))
+    (call/cc (lambda (k)
+               (set! continuation k)))
+    (set! i (+ i 1))
+    i))
+
+That's like the Python:
+
+def test():
+    i = 0
+    global continuation
+    continuation = magic to resume at the start of the next line
+    i = i + 1
+    return i
+
+Then (this is interactive output from a Scheme shell):
+
+&gt;<i> (test) ; Python &quot;test()&quot;
+</I>1
+&gt;<i> (continuation) ; Python &quot;continuation()&quot;
+</I>2
+&gt;<i> (continuation)
+</I>3
+&gt;<i> (define thisguy continuation) ; Python &quot;thisguy = continuation&quot;
+</I>&gt;<i> (test)
+</I>1
+&gt;<i> (continuation)
+</I>2
+&gt;<i> (thisguy)
+</I>4
+&gt;<i>
+</I>
+too-simple-to-be-obvious?-ly y'rs  - tim
+
+
+
+
+</PRE>
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI> Previous message: <A HREF="000463.html">Fake threads (was [Python-Dev] ActiveState &amp; fork &amp; Perl)
+</A></li>
+	<LI> Next message: <A HREF="000468.html">Fake threads (was [Python-Dev] ActiveState &amp; fork &amp; Perl)
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#467">[ date ]</a>
+              <a href="thread.html#467">[ thread ]</a>
+              <a href="subject.html#467">[ subject ]</a>
+              <a href="author.html#467">[ author ]</a>
+         </LI>
+       </UL>
+</body></html>
