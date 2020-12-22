@@ -86,6 +86,10 @@ Also we might not want to tag the function but introduce CPS block instead?
 
 Also pretty sure you can't use {.thread.} variable in a coroutine (but that's true also for something distributed on a threadpool)
 
+### Multithreading
+
+- What is needed for synchronization
+
 ### Overhead
 
 - Overhead of call/resume vs a function call?
@@ -102,6 +106,14 @@ Zero-alloc coroutines can allow building high-performance libraries
 by using memory and IO latency-hinding techniques:
 - CoroBase: https://arxiv.org/pdf/2010.15981.pdf
 - https://github.com/sfu-dis/corobase
+- NanoCoroutines https://www.youtube.com/watch?v=j9tlJAqMV7U
+
+Disappearing coroutines (constant folded)
+- https://youtu.be/8C8NnE1Dg4A?t=544
+
+Compiling to LLVM coroutines
+- https://llvm.org/docs/Coroutines.html
+- https://llvm.org/devmtg/2016-11/Slides/Nishanov-LLVMCoroutines.pdf
 
 ## Scheduler agnostic
 

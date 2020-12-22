@@ -82,12 +82,42 @@ _Note 2: Rust seems to have come to the same conclusion. Rust features are delay
 
 ### C++ coroutines
 
-- C++ Coroutines: A negative overhead abstraction
-  - https://www.youtube.com/watch?v=_fu0gx-xseY
-  - https://github.com/GorNishanov/await/tree/master/2015_CppCon/SuperLean
+- https://lewissbaker.github.io/2017/09/25/coroutine-theory
+- https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await
 
-- Coroutines: what can't they do with
-  - https://youtu.be/mlP1MKP8d_Q
+Disappearing coroutines:
+- https://godbolt.org/g/26viuZ
+
+- CppCon 2015
+  - C++ Coroutines: A negative overhead abstraction
+    - https://www.youtube.com/watch?v=_fu0gx-xseY
+    - https://github.com/CppCon/CppCon2015/blob/master/Presentations/C%2B%2B%20Coroutines/C%2B%2B%20Coroutines%20-%20Gor%20Nishanov%20-%20CppCon%202015.pdf
+    - https://github.com/GorNishanov/await/tree/master/2015_CppCon/SuperLean
+- CppCon 2016
+  - C++ coroutines: under the cover
+    - https://www.youtube.com/watch?v=8C8NnE1Dg4A
+    - https://github.com/GorNishanov/await/tree/master/2016_CppCon
+    - https://github.com/CppCon/CppCon2016/tree/master/Presentations/C%2B%2B%20Coroutines%20-%20Under%20The%20Covers
+
+- CppCon 2017
+  - Coroutines: what can't they do.
+    - https://youtu.be/mlP1MKP8d_Q
+    - https://github.com/CppCon/CppCon2017/blob/master/Presentations/Coroutines%20What%20Can't%20They%20Do/Coroutines%20What%20Can't%20They%20Do%20-%20Toby%20Allsopp%20-%20CppCon%202017.pdf
+  - Naked Coroutines Live with Networking
+    - https://www.youtube.com/watch?v=UL3TtTgt3oU
+    - https://github.com/CppCon/CppCon2017/blob/master/Demos/Naked%20Coroutines%20Live/Naked%20Coroutines%20Live%20-%20Gor%20Nishanov%20-%20CppCon%202017.pdf
+    - https://github.com/GorNishanov/await/tree/master/2017_CppCon
+  - Concurrency, Parallelism and Coroutines
+    - https://www.youtube.com/watch?v=JvHZ_OECOFU
+    - https://github.com/CppCon/CppCon2017/blob/master/Presentations/Concurrency%2C%20Parallelism%20and%20Coroutines/Concurrency%2C%20Parallelism%20and%20Coroutines%20-%20Anthony%20Williams%20-%20CppCon%202017.pdf
+
+- CppCon 2018
+  - NanoCoroutines: sub-nanosecond cost to hide cache latencies in databases
+    - https://www.youtube.com/watch?v=j9tlJAqMV7U
+    - https://github.com/GorNishanov/await/tree/master/2018_CppCon
+
+For ultra low overhead coroutines usecase:
+- CoroBase: https://arxiv.org/pdf/2010.15981.pdf
 
 ### C# Async/Await
 
@@ -123,6 +153,34 @@ Talks:
 - https://jorgecastillo.dev/digging-into-kotlin-continuations
 - https://proandroiddev.com/how-do-coroutines-work-under-the-hood-803e6e9da8bb
 
+### LLVM coroutines
+
+- https://llvm.org/docs/Coroutines.html
+- https://clang.llvm.org/docs/LanguageExtensions.html#c-coroutines-support-builtins
+  - "stable"
+    - `void  __builtin_coro_resume(void *addr);;`
+    - `void  __builtin_coro_destroy(void *addr);;`
+    - `bool  __builtin_coro_done(void *addr);;`
+    - `void *__builtin_coro_promise(void *addr, int alignment, bool from_promise);`
+  - Internal
+    - `size_t __builtin_coro_size()`
+    - `void  *__builtin_coro_frame()`
+    - `void  *__builtin_coro_free(void *coro_frame)`
+
+    - `void  *__builtin_coro_id(int align, void *promise, void *fnaddr, void *parts)`
+    - `bool   __builtin_coro_alloc()`
+    - `void  *__builtin_coro_begin(void *memory)`
+    - `void   __builtin_coro_end(void *coro_frame, bool unwind)`
+    - `char   __builtin_coro_suspend(bool final)`
+    - `bool   __builtin_coro_param(void *original, void *copy)`
+
+- LLVM coroutines
+  - https://llvm.org/devmtg/2016-11/Slides/Nishanov-LLVMCoroutines.pdf
+  - https://www.youtube.com/watch?v=Ztr8QvMhqmQ
+- Coroutines representation and ABIs in LLVM
+  - https://www.youtube.com/watch?v=wyAbV8AM9PM
+  -
+
 ### Lua coroutines
 
 - https://spin.atomicobject.com/2013/07/01/lua-coroutines/
@@ -131,6 +189,10 @@ Talks:
 ### Javascript React Fiber
 
 - https://www.yld.io/blog/continuations-coroutines-fibers-effects/
+
+### Nim closure iterators
+
+- https://github.com/nim-lang/Nim/blob/v1.4.2/compiler/closureiters.nim
 
 ### Ocaml Async
 
@@ -234,6 +296,23 @@ Swift would build async/await on top of coroutines abstraction
 
 The yield paper proved that `yield` as used in programming language
 is equivalent to `shift` and `reset` used to build delimited continuations.
+
+#### Use cases
+
+Database optimization
+- Interleaving with Coroutines: A Practical Approach for Robust Index Joins\
+  Very Large DataBase conference
+  - http://www.vldb.org/pvldb/vol11/p230-psaropoulos.pdf
+  - https://infoscience.epfl.ch/record/231318
+- Exploiting Coroutines to Attack the “Killer Nanoseconds”\
+  http://www.vldb.org/pvldb/vol11/p1702-jonathan.pdf
+  > A key requirement for efficient “interleaving” is that a context-switch must take less time than a memory stall.
+  > Otherwise, switching contexts adds more overhead than originally imposed by thememory stalls.
+  > This requirement renders many existing multi-threading techniques useless,
+  > including light-weight, user-mode threads, known as fibers or stackful coroutine
+- Bridging the Latency Gap between NVM and DRAM for Latency-bound Operations\
+  https://www.semanticscholar.org/paper/Bridging-the-Latency-Gap-between-NVM-and-DRAM-for-Psaropoulos-Oukid/1b3e3dd80c1ae2c02c6a2745e941d8cccb75f6c1
+
 
 ## Wikipedia - related concepts
 
