@@ -45,6 +45,8 @@ The Rise of Coroutines, by Kotlin Coroutines lead:
 
 - Downloading a billion files with Python: https://ep2019.europython.eu/media/conference/slides/KNhQYeQ-downloading-a-billion-files-in-python.pdf
 - Efficient IO with io_uring: http://kernel.dk/io_uring.pdf
+- A Primer on Scheduling via work-stealing (continuation stealing or child task stealing):\
+  http://www.open-std.org/Jtc1/sc22/wg21/docs/papers/2014/n3872.pdf
 
 ## Nim RFCs
 
@@ -85,6 +87,8 @@ _Note 2: Rust seems to have come to the same conclusion. Rust features are delay
 - https://lewissbaker.github.io/2017/09/25/coroutine-theory
 - https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await
 
+Library impact: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0975r0.html
+
 Disappearing coroutines:
 - https://godbolt.org/g/26viuZ
 
@@ -118,6 +122,36 @@ Disappearing coroutines:
 
 For ultra low overhead coroutines usecase:
 - CoroBase: https://arxiv.org/pdf/2010.15981.pdf
+- Interleaving with Coroutines: A Practical Approach for Robust Index Joins\
+  Very Large DataBase conference
+  - http://www.vldb.org/pvldb/vol11/p230-psaropoulos.pdf
+  - https://infoscience.epfl.ch/record/231318
+- Exploiting Coroutines to Attack the “Killer Nanoseconds”\
+  http://www.vldb.org/pvldb/vol11/p1702-jonathan.pdf
+  > A key requirement for efficient “interleaving” is that a context-switch must take less time than a memory stall.
+  > Otherwise, switching contexts adds more overhead than originally imposed by thememory stalls.
+  > This requirement renders many existing multi-threading techniques useless,
+  > including light-weight, user-mode threads, known as fibers or stackful coroutine
+- Bridging the Latency Gap between NVM and DRAM for Latency-bound Operations\
+  https://www.semanticscholar.org/paper/Bridging-the-Latency-Gap-between-NVM-and-DRAM-for-Psaropoulos-Oukid/1b3e3dd80c1ae2c02c6a2745e941d8cccb75f6c1
+
+Alternatives and criticism of C++ CoroutineTS
+- https://botondballo.wordpress.com/2019/03/20/trip-report-c-standards-meeting-in-kona-february-2019/#coroutines
+  - Core Coroutines: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1063r2.pdf
+  - Symmetric Coroutines: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1430r0.pdf
+
+### C++ Fibers
+
+Fibers == stackful coroutines == user-mode threads
+as in they allocate their own stacks on the heap
+and modify the stack base pointer and stack pointer to jump to it
+
+- Fibers under the magnifying glass\
+  http://www.open-std.org/JTC1/SC22/WG21/docs/papers/2018/p1364r0.pdf
+
+### C++ Resumable Functions
+
+- https://isocpp.org/files/papers/N4402.pdf
 
 ### C# Async/Await
 
@@ -223,6 +257,7 @@ _Caveat: As Windows IOCP and Linux io_uring require being passed an owned buffer
 
 - https://aturon.github.io/blog/2016/08/11/futures/
 - https://aturon.github.io/blog/2016/09/07/futures-design/
+- https://tokio.rs/tokio/tutorial/async
 - https://jblog.andbit.net/2019/11/10/rust-async-execution/
 - https://tmandry.gitlab.io/blog/posts/optimizing-await-1/
 - https://gist.github.com/Matthias247/5e5e7430149bbb04eebf18cf31747fe0

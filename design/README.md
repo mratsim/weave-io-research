@@ -110,6 +110,7 @@ by using memory and IO latency-hinding techniques:
 
 Disappearing coroutines (constant folded)
 - https://youtu.be/8C8NnE1Dg4A?t=544
+- https://godbolt.org/g/26viuZ
 
 Compiling to LLVM coroutines
 - https://llvm.org/docs/Coroutines.html

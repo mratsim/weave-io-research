@@ -26,3 +26,18 @@ Single-pass conversion of one-format to another
 ## Multithreading
 
 - Multithreaded async stream
+
+## Cryptographic protocol
+
+Require no allocation
+Require complex state machines, for example TLS handshake.
+
+## Kernel-mode driver
+
+Require no allocation
+Require complex state machines
+
+## Saving/Suspending workflows
+
+For example user authentication, registration, etc on a webpage
+Requires the suspendable function to be serializable.
