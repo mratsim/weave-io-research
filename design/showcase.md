@@ -41,3 +41,10 @@ Require complex state machines
 
 For example user authentication, registration, etc on a webpage
 Requires the suspendable function to be serializable.
+
+## Asynchronous garbage collection
+
+(speculative)
+
+The GC should be able to attach an async `=destroy` or finalizers
+at the leaves of the "continuation graph"

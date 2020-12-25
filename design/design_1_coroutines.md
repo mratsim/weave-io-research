@@ -182,6 +182,14 @@ It makes it also easy to build cancellation via passing a `cancel: bool` paramet
 
 _Note: we can also build a state machine manually with "onOpen(...), tryReceive(...), close(...)"_
 
+However I do have some concerns about whther to pursue the `{.resume.}` feature
+as explained here: https://github.com/disruptek/cps/discussions/42
+The `{.resume.}` feature would make the coroutine have a polymorphic signature.
+It wouldn't map cleanly to a function since arguments are changing mid-computation.
+Furthermore, there is an issue if there are different arguments necessary for different suspension points
+do we want `{.resume: 1.}` and `{.resume: 2.}` to refer to yield location?
+The cleanest solution would be to have channel(s) to communicate with coroutines, effectively making them actors.
+
 ### Open question
 
 `yield` within the coroutine highlights suspension points.
@@ -249,5 +257,3 @@ Here are some use cases:
 ### Multithreading
 
 - Synchronization without atomics or locks
-
-

@@ -17,6 +17,12 @@ Layman's explanation of delimited continuations with examples of using them for 
 The Rise of Coroutines, by Kotlin Coroutines lead:
 - https://learningactors.com/the-rise-of-the-coroutines/
 
+## Low-level introduction to Continuation-Passing Style and Coroutines
+
+- KotlinConf 2017 - Deep Dive into coroutines on the JVM by Roman Elizarov\
+  https://www.youtube.com/watch?v=YrrUCSi72E8
+- https://resources.jetbrains.com/storage/products/kotlinconf2017/slides/2017+KotlinConf+-+Deep+dive+into+Coroutines+on+JVM.pdf
+
 ## Included in repo
 
 - General: Layman's explanation of delimited continuations
@@ -37,6 +43,7 @@ The Rise of Coroutines, by Kotlin Coroutines lead:
 
 - F#: Implementing coroutines (async/await) with continuations: https://gist.github.com/mrange/147fe94da28fbb237af4e9bd39da4ad3
 - Kotlin coroutines: https://github.com/Kotlin/KEEP/blob/31bb8af/proposals/coroutines.md
+- Kotlin coroutine deep dive: https://resources.jetbrains.com/storage/products/kotlinconf2017/slides/2017+KotlinConf+-+Deep+dive+into+Coroutines+on+JVM.pdf
 - Python mailing list on fake threads (coroutines, continuations, generators): https://mail.python.org/pipermail/python-dev/1999-July/000467.html
 - Rust async/await interface challenge - Matthias247: https://gist.github.com/Matthias247/5e5e7430149bbb04eebf18cf31747fe0
 - Rust async/await cancellation challenge - Matthias247: https://gist.github.com/Matthias247/ffc0f189742abf6aa41a226fe07398a8
@@ -139,6 +146,8 @@ Alternatives and criticism of C++ CoroutineTS
 - https://botondballo.wordpress.com/2019/03/20/trip-report-c-standards-meeting-in-kona-february-2019/#coroutines
   - Core Coroutines: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1063r2.pdf
   - Symmetric Coroutines: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1430r0.pdf
+- Are stackless coroutines a problem?
+  - https://stackoverflow.com/questions/57163510/are-stackless-c20-coroutines-a-problem
 
 ### C++ Fibers
 
@@ -178,6 +187,19 @@ Kotlin builds async/await on top of coroutines abstraction
 Talks:
 - KotlinConf 2017 - Introduction to Coroutines by Roman Elizarov\
   https://www.youtube.com/watch?v=_hfBv0a09Jc
+- KotlinConf 2017 - Deep Dive into coroutines on the JVM by Roman Elizarov\
+  https://www.youtube.com/watch?v=YrrUCSi72E8 \
+  - Continuation Passing Style
+  - Direct style
+  - suspension
+  - continuation
+  - restoring state
+  - state machine vs callbacks
+  - dispatch
+  - cancellation
+  - Communicating Sequential Process
+  - Actors
+  - https://resources.jetbrains.com/storage/products/kotlinconf2017/slides/2017+KotlinConf+-+Deep+dive+into+Coroutines+on+JVM.pdf
 - Concurrency doesn't have to be hard: Kotlin Coroutines and Channels by Jag Saund\
   https://www.youtube.com/watch?v=3WGM-_MnPQA \
   Excellent example with concurrent baristas a single coffee machine and a waiter taking orders
@@ -285,6 +307,10 @@ Note: stackless in Rust means on the stack while stackless in Python means on th
 
 Swift would build async/await on top of coroutines abstraction
 
+24 Dec announcement:
+- Async/Await proposal accepted: https://forums.swift.org/t/accepted-with-modification-se-0296-async-await/43318
+-
+
 ## Kernel I/O primitives
 
 ### Windows IOCP
@@ -316,6 +342,30 @@ Swift would build async/await on top of coroutines abstraction
 - The Discoveries of Continuations,
   John Reynolds\
   https://www.cs.tufts.edu/~nr/cs257/archive/john-reynolds/histcont.pdf
+
+- Representing Monads\
+  Filinski, 1994\
+  http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.43.8213&rep=rep1&type=pdf
+  Reddit quote: https://www.reddit.com/r/programming/comments/pz26z/oleg_says_its_time_to_think_about_removing_callcc/c3twxmh/?utm_source=reddit&utm_medium=web2x&context=3
+  > A compelling argument for why delimited continuations are elegant is the paper Representing Monads. Two very short one liners are enough to make any monad native to your programming language. For example your language doesn't support exceptions? Define a maybe monad and use monadic reflection to make them feel like native exceptions. Your language doesn't have mutable state? Define a state monad and use monadic reflection to make it feel like native mutable state. Your language doesn't have coroutines and requires you to write callback manually as in Node.js? Define a monad similar to F#'s async workflows (=~ continuation monad), and now it feels like your language has native asynchronicity. The same goes for monadic parsers.
+
+  > Summary: delimited continuations give you a way to write monadic code as if you were writing normal code (you could say it's do-notation on steroids).
+
+- Capturing the Future by Replaying the Past\
+  Functional Pearl\
+  James Koppel, Gabriel Scherer, Armando Solar-Lezama\
+  https://arxiv.org/pdf/1710.10385.pdf\
+  > Delimited continuations are the mother of all monads! So goes the slogan inspired by Filinski’s 1994 paper,which showed that delimited continuations can implement any monadic effect, letting the programmer usean effect as easily as if it was built into the language. It’s a shame that not many languages have delimited continuations.
+
+
+Ergonomics (coroutine == delimited continuations):
+- http://okmij.org/ftp/continuations/undelimited.html
+- http://okmij.org/ftp/continuations/against-callcc.html
+- Scheme callCC: http://scheme-reports.org/mail/scheme-reports/msg02780.html
+- Ruby continuations considered harmful: http://www.atdot.net/~ko1/pub/ContinuationFest-ruby.pdf
+
+- A monadic framework for delimited continuations
+  - https://legacy.cs.indiana.edu/~dyb/pubs/monadicDC.pdf
 
 ### Coroutines
 
