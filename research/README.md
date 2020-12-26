@@ -99,6 +99,9 @@ Library impact: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0975r0.
 Disappearing coroutines:
 - https://godbolt.org/g/26viuZ
 
+- Await 2.0 Stackless resumable function
+  - https://www.youtube.com/watch?v=KUhSjfSbINE
+
 - CppCon 2015
   - C++ Coroutines: A negative overhead abstraction
     - https://www.youtube.com/watch?v=_fu0gx-xseY
@@ -313,6 +316,9 @@ Swift would build async/await on top of coroutines abstraction
 
 ## Kernel I/O primitives
 
+- The Secret to 10 Million Concurrent Connections -The Kernel is the Problem, Not the Solution\
+  http://highscalability.com/blog/2013/5/13/the-secret-to-10-million-concurrent-connections-the-kernel-i.html
+
 ### Windows IOCP
 
 - https://docs.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports
@@ -406,7 +412,7 @@ Database optimization
 - Coroutines: https://en.wikipedia.org/wiki/Coroutine
 - Continuation: https://en.wikipedia.org/wiki/Continuation
 - Continuation Passing Style: https://en.wikipedia.org/wiki/Continuation-passing_style
-- Delimited COntinuation: https://en.wikipedia.org/wiki/Delimited_continuation
+- Delimited Continuation: https://en.wikipedia.org/wiki/Delimited_continuation
 
 ## CPS for compilers
 
@@ -440,6 +446,9 @@ And an equivalent construct is needed for sync->async especially:
 - http://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/
 - https://elizarov.medium.com/how-do-you-color-your-functions-a6bb423d936d
 
+Rebuttal of the function color myth:
+- https://lukasa.co.uk/2016/07/The_Function_Colour_Myth/
+
 ### {.sideeffect.}, IO Monad, Tainted string, Result, error code are all colored
 
 - https://wiki.haskell.org/Introduction_to_IO
@@ -471,6 +480,11 @@ At this point, the current thread can either:
 The main difference is that continuation stealing require saving the stack frame of the current function or it can't be resumed from an arbitrary thread. And another consequence is that function including cilk_spawn have a different calling convention than C since they are resumable. This means that Cilk program cannot naively be called from C. The workaround Cilk developers used is to always compile 2 versions of a program, one with the Cilk resumable calling convention and one with the C calling convention.
 
 A side note: continuation stealing ensures that on a single-thread order of execution of the program is the same as it's serial equivalent. Also child stealing suffers from unbounded suspended tasks spawned since they are only worked on late. It's an excellent way to DOS GCC OpenMP implementation.
+
+### Ergonomics
+
+Adding async call vs not adding it:
+- https://glyph.twistedmatrix.com/2014/02/unyielding.html
 
 ## Schedulers
 
