@@ -247,3 +247,27 @@ Here are some design choices:
   - Can we extend for non-GC type?
     - non-ref types with non-trivial destructors
       should be OK since they are moved.
+
+- Continuation stackframe API for dispatchers.
+  ```Nim
+  proc trampoline*(c: Cont) =
+  ## Run the supplied continuation until it is complete.
+  var c = c
+  when cpsTrace:
+    var stack = initDeque[Frame](cpsTraceSize)
+  while not c.isNil and not c.fn.isNil:
+    when cpsDebug:
+      echo "🎪tramp ", c, " at ", c.clock
+    try:
+      when cpsMutant:
+        c.fn(c)
+      else:
+        c = c.fn(c)
+      when cpsTrace:
+        if not c.isNil:
+          addFrame(stack, c)
+    except CatchableError:
+      when cpsTrace:
+        writeStackTrace(stack)
+      raise
+  ```
