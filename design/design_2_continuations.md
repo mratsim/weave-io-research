@@ -1,5 +1,8 @@
 # First-class continuations
 
+The promise of continuations:
+- Solving the non-blocking producer->consumer flow without intermediate buffers, without atomics or locks synchronization, without state machine, can be paused, interleaved, resumed, composed.
+
 ## Introduction
 
 We propose to introduce first-class delimited continuations to the Nim language.
@@ -146,6 +149,10 @@ As you notice, a lot of those domain problems can be unified under a single keyw
 - Pass to the parser
 - Process()
 - sendResponse
+
+The key idea is that **continuations are a perfect fit for describing producer->consumer flow**.
+- `suspend` is the producer side
+- `resume` is the consumer side.
 
 This is an example with 2 schedulers integration.
 Having continuations as the building blocks allows
