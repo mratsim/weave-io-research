@@ -173,12 +173,12 @@ var ioScheduler{.threadvar.}: IOScheduler
 var computeScheduler{.threadvar.}: CPUScheduler
 var isRootThread{.threadvar.}: bool
 
-proc saveContinuationAndSuspend() {.suspend.} =
+proc saveContinuation() {.suspend.} =
   ioScheduler.enqueue bindCallerContinuation()
 
 proc await[T](e: Awaitable[T]): T {.resumable.} =
   if not e.isReady():
-    saveContinuationAndSuspend()
+    suspendAfter saveContinuation()
   return e.get()
 
 proc continueOnThreadpool(pool: CPUScheduler) {.suspend.} =
@@ -188,7 +188,7 @@ proc serve(socket: Socket) =
   while true:
     let conn = await socket.connect()
     if isRootThread:
-      suspendWith pool.continueOnThreadpool()
+      suspendAfter pool.continueOnThreadpool()
     # --- the rest is on another thread on the CPU threadpool.
     #     and the root thread can handle IO again.
     # Stream processing
@@ -211,7 +211,7 @@ Continuations will had only 3 ways of interacting with them:
 - `bindCallerContinuation`: store the caller in a first class object (reification) that can be used to call the continuation later, just like calling a callback.
   We allow `bindCallerContinuation` only once and only in a procedure tagged `{.suspend.}`.
 - `resumeContinuation`: jumps to a continuation, execute it and return to the current context.
-- `suspendWith`: call a `{.suspend.}` function that will suspend us afterward.
+- `suspendAfter`: call a `{.suspend.}` function that will suspend us afterward.
 
 `bindCallerContinuation` and `resumeContinuation` are intentionally made verbose and easy to grep for a maintenance and debugging perspective.
 They represent jump points to non-local control flow.
@@ -220,7 +220,7 @@ we expect that only low-level library developers for IO, streams, lexers, parser
 
 #### Research and other languages
 
-`suspendWith` is similar to `callCC` from Scheme except that:
+`suspendAfter` is similar to `callCC` from Scheme except that:
 - It passes a delimited continuation (only until the end of the function)
 - The continuation can only be run once
 
