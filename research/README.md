@@ -23,6 +23,91 @@ The Rise of Coroutines, by Kotlin Coroutines lead:
   https://www.youtube.com/watch?v=YrrUCSi72E8
 - https://resources.jetbrains.com/storage/products/kotlinconf2017/slides/2017+KotlinConf+-+Deep+dive+into+Coroutines+on+JVM.pdf
 
+## Coroutines can replace state-machines:
+
+- Eli Bendersky - [Implementing First-Class Polymorphic Delimited Continuations by a Type-Directed Selective CPS-Transform](https://eli.thegreenplace.net/2009/08/29/co-routines-as-an-alternative-to-state-machines)
+
+### State machine
+```python
+class ProtocolWrapper(object):
+    def __init__(self,
+            header='\x61',
+            footer='\x62',
+            dle='\xAB',
+            after_dle_func=lambda x: x):
+        self.header = header
+        self.footer = footer
+        self.dle = dle
+        self.after_dle_func = after_dle_func
+
+        self.state = self.WAIT_HEADER
+        self.frame = ''
+
+    # internal state
+    (WAIT_HEADER, IN_MSG, AFTER_DLE) = range(3)
+
+    def input(self, byte):
+        """ Receive a byte.
+            If this byte completes a frame, the
+            frame is returned. Otherwise, None
+            is returned.
+        """
+        if self.state == self.WAIT_HEADER:
+            if byte == self.header:
+                self.state = self.IN_MSG
+                self.frame = ''
+
+            return None
+        elif self.state == self.IN_MSG:
+            if byte == self.footer:
+                self.state = self.WAIT_HEADER
+                return self.frame
+            elif byte == self.dle:
+                self.state = self.AFTER_DLE
+            else:
+                self.frame += byte
+            return None
+        elif self.state == self.AFTER_DLE:
+            self.frame += self.after_dle_func(byte)
+            self.state = self.IN_MSG
+            return None
+        else:
+            raise AssertionError()
+```
+
+### Coroutines
+
+```python
+@coroutine
+def unwrap_protocol(header='\x61',
+                    footer='\x62',
+                    dle='\xAB',
+                    after_dle_func=lambda x: x,
+                    target=None):
+    """ Simplified framing (protocol unwrapping)
+        co-routine.
+    """
+    # Outer loop looking for a frame header
+    #
+    while True:
+        byte = (yield)
+        frame = ''
+
+        if byte == header:
+            # Capture the full frame
+            #
+            while True:
+                byte = (yield)
+                if byte == footer:
+                    target.send(frame)
+                    break
+                elif byte == dle:
+                    byte = (yield)
+                    frame += after_dle_func(byte)
+                else:
+                    frame += byte
+```
+
 ## Included in repo
 
 - General: Layman's explanation of delimited continuations
