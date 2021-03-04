@@ -125,7 +125,7 @@ def unwrap_protocol(header='\x61',
 - C++ coroutines:
   - Theory: https://lewissbaker.github.io/2017/09/25/coroutine-theory
   - co_await: https://lewissbaker.github.io/2017/11/17/understanding-operator-co-await
-
+  - p1492r0, tradeoffs of implementations "details": http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1492r0.pdf
 - F#: Implementing coroutines (async/await) with continuations: https://gist.github.com/mrange/147fe94da28fbb237af4e9bd39da4ad3
 - Kotlin coroutines: https://github.com/Kotlin/KEEP/blob/31bb8af/proposals/coroutines.md
 - Kotlin coroutine deep dive: https://resources.jetbrains.com/storage/products/kotlinconf2017/slides/2017+KotlinConf+-+Deep+dive+into+Coroutines+on+JVM.pdf
@@ -236,6 +236,11 @@ Alternatives and criticism of C++ CoroutineTS
   - Symmetric Coroutines: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1430r0.pdf
 - Are stackless coroutines a problem?
   - https://stackoverflow.com/questions/57163510/are-stackless-c20-coroutines-a-problem
+
+Tradeoffs of various implementation techniques including:
+- http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2019/p1492r0.pdf
+- early-split (Rust-like, state-machine transformation in the front-end)
+- late-split (CoroutineTS, state-machine transformation elayed in the optimizer)
 
 ### C++ Fibers
 
@@ -370,10 +375,31 @@ _Caveat: As Windows IOCP and Linux io_uring require being passed an owned buffer
 - https://tokio.rs/tokio/tutorial/async
 - https://jblog.andbit.net/2019/11/10/rust-async-execution/
 - https://tmandry.gitlab.io/blog/posts/optimizing-await-1/
+  - https://tmandry.gitlab.io/blog/posts/optimizing-await-2/ (program analysis and state machine transformation)
+  - C++ vs Rust design discussion https://news.ycombinator.com/item?id=20741350
 - https://gist.github.com/Matthias247/5e5e7430149bbb04eebf18cf31747fe0
--  https://gist.github.com/Matthias247/ffc0f189742abf6aa41a226fe07398a8
+- https://gist.github.com/Matthias247/ffc0f189742abf6aa41a226fe07398a8
+- https://boats.gitlab.io/blog/post/wakers-i/
+  - https://boats.gitlab.io/blog/post/wakers-ii/
+- https://rust-lang.github.io/async-book/02_execution/01_chapter.html
 
 In particular it distinguishes between the traditional completion-based and their own poll-based futures with completion-based requiring a buffer for each future and so requiring more memory allocation (which are problematic because it stresses the GC, and lead to memory fragmentation on long running application). In particular the poll approach is attractive because it eases cancellation (don't poll) and since there is no heap indirection for the future, the compiler can do deep optimizations.
+
+Presentations:
+- Rust's Journey to Async/await: https://www.infoq.com/presentations/rust-2019/
+- https://www.infoq.com/presentations/rust-async-await/
+
+Key takeways
+
+- Rust async-await is future-first instead of being coroutine-first.
+- Rust allocates once per async scope (structured concurrency) instead of once per coroutine (await calls).
+- The future stack contains all the intermediate state and the future is implemented as a state machine.
+- The Executor and the Reactor (event loop) are separated.
+  - The executor has a collection of runnable tasks and schedules them
+  - The reactor has a collection of handles (futures) and notify the associated executor on events
+  - A Rust future is a handle to a computation, it associates a procedure + data/context + an executor
+    - The executor handle is stored in a field of type Waker
+  - A task is a future in-progress, currently scheduled by an executor
 
 ### Rust RFCs
 
