@@ -405,6 +405,7 @@ Key takeways
 
 - (merged) Futures: https://github.com/rust-lang/rfcs/blob/master/text/2592-futures.md
 - (merged) Async/await: https://github.com/rust-lang/rfcs/blob/master/text/2394-async_await.md
+- discussion CPS in Rust: https://internals.rust-lang.org/t/pre-rfc-cps-transform-for-generators/7120
 
 - (open) Stackless coroutines: https://github.com/rust-lang/rfcs/pull/1823
 
