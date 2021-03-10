@@ -26,3 +26,16 @@
 
 - http://www.pathsensitive.com/2019/07/the-best-refactoring-youve-never-heard.html
   - https://youtu.be/vNwukfhsOME
+- Definitional interpreters for higher-order programming languages https://surface.syr.edu/cgi/viewcontent.cgi?article=1012&context=lcsmith_other
+- Defunctionalization at Work https://www.brics.dk/RS/01/23/BRICS-RS-01-23.pdf
+- https://ncatlab.org/nlab/show/defunctionalization
+- https://en.wikipedia.org/wiki/Defunctionalization
+- https://bartoszmilewski.com/2020/08/03/defunctionalization-and-freyds-theorem/
+- On Interaction, Continuations and Defunctionalization http://www2.tcs.ifi.lmu.de/%7Eschoepp/Docs/tlca13.pdf
+- (Paywalled) Design and Correctness of Program Transformations Based on Control-Flow Analysis https://link.springer.com/chapter/10.1007/3-540-45500-0_21
+- Defunctionalization in C++ https://gist.github.com/kyouko-taiga/f8e2801f637604b195b4ffdcd2e347c0
+- Alternatives to defunctionalization https://cs.stackexchange.com/questions/66412/alternatives-to-defunctionalization
+- Defunctionalization and Java https://blog.plover.com/prog/defunctionalization.html
+- https://typesandkinds.wordpress.com/2013/04/01/defunctionalization-for-the-win/
+- https://www.cis.upenn.edu/~plclub/blog/2020-05-15-Defunctionalize-the-Continuation/
+  - https://docs.google.com/presentation/d/e/2PACX-1vSmSFQ3BnHOAKi6-ITLj55VdnNb-IZDSCPjM-C1miaavq-Ku9lxqjbtLFBAEQKGHrWmTsQO4asxf-3P/pub?start=false&loop=false&delayms=5000#slide=id.p
