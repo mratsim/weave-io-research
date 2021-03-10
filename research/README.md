@@ -339,6 +339,11 @@ Talks:
 
 - https://www.yld.io/blog/continuations-coroutines-fibers-effects/
 
+### ML
+
+- http://manticore.cs.uchicago.edu/
+- Manticore, Weighing Continuations for Concurrency https://kavon.farvard.in/papers/masters.pdf
+
 ### Nim closure iterators
 
 - https://github.com/nim-lang/Nim/blob/v1.4.2/compiler/closureiters.nim
@@ -382,6 +387,8 @@ _Caveat: As Windows IOCP and Linux io_uring require being passed an owned buffer
 - https://boats.gitlab.io/blog/post/wakers-i/
   - https://boats.gitlab.io/blog/post/wakers-ii/
 - https://rust-lang.github.io/async-book/02_execution/01_chapter.html
+- https://theta.eu.org/2021/03/08/async-rust-2.html (Why asynchronous Rust doesn't work)
+  - https://news.ycombinator.com/item?id=26406989
 
 In particular it distinguishes between the traditional completion-based and their own poll-based futures with completion-based requiring a buffer for each future and so requiring more memory allocation (which are problematic because it stresses the GC, and lead to memory fragmentation on long running application). In particular the poll approach is attractive because it eases cancellation (don't poll) and since there is no heap indirection for the future, the compiler can do deep optimizations.
 
@@ -414,6 +421,11 @@ Note: stackless in Rust means on the stack while stackless in Python means on th
 ### Rust-style futures in C
 
 - https://axelforsman.tk/2020/08/24/rust-style-futures-in-c.html
+
+### Scheme
+
+- Continuations: The Swiss Army Knife of Flow Control\
+  https://www.youtube.com/watch?v=Ju3KKu_mthg
 
 ### Swift Async proposal
 
