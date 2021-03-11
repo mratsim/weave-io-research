@@ -387,8 +387,6 @@ _Caveat: As Windows IOCP and Linux io_uring require being passed an owned buffer
 - https://boats.gitlab.io/blog/post/wakers-i/
   - https://boats.gitlab.io/blog/post/wakers-ii/
 - https://rust-lang.github.io/async-book/02_execution/01_chapter.html
-- https://theta.eu.org/2021/03/08/async-rust-2.html (Why asynchronous Rust doesn't work)
-  - https://news.ycombinator.com/item?id=26406989
 
 In particular it distinguishes between the traditional completion-based and their own poll-based futures with completion-based requiring a buffer for each future and so requiring more memory allocation (which are problematic because it stresses the GC, and lead to memory fragmentation on long running application). In particular the poll approach is attractive because it eases cancellation (don't poll) and since there is no heap indirection for the future, the compiler can do deep optimizations.
 
@@ -408,6 +406,11 @@ Key takeways
     - The executor handle is stored in a field of type Waker
   - A task is a future in-progress, currently scheduled by an executor
 
+### Rust rough edges and criticism
+
+- https://theta.eu.org/2021/03/08/async-rust-2.html (Why asynchronous Rust doesn't work)
+  - https://news.ycombinator.com/item?id=26406989
+- Async virality and runtime pigeonholing https://www.reddit.com/r/rust/comments/m2hrfp/any_advice_for_dealing_with_async_in_libraries/
 ### Rust RFCs
 
 - (merged) Futures: https://github.com/rust-lang/rfcs/blob/master/text/2592-futures.md
