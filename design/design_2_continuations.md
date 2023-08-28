@@ -8,7 +8,9 @@ The promise of continuations:
 We propose to introduce first-class delimited continuations to the Nim language.
 
 Continuations are low-level control-flow primitives that are able to model
-all other control flow primitives. They are actually used as the privileged intermediate representation of optimizing compilers for functional language just like SSA (Single Static Assignment) is used for imperative language.
+all other control flow primitives.
+
+They are actually used as the privileged intermediate representation of optimizing compilers for functional language just like SSA (Single Static Assignment) is used for imperative language.
 
 It has been proven in 1994 that delimited continuations are able to model any monads including exceptions, mutable state, coroutines, asynchrony. In particular just like the macro system at compile-time, they would allow Nim developers to integrate most (any?) breakthrough of concepts and programming practices from any language, at run-time.
 
@@ -46,6 +48,7 @@ Another way to look at continuation is to remark that they represent "What comes
 A continuation is called `undelimited` if it represents the rest of the whole program. It is called `delimited` if it only represent a subset of the program.
 
 It has been shown that delimited continuations are both more powerful and easier to manipulate as they are typed and can return values, though technically undelimited continuation can return an exit code.
+
 We are interested in delimited continuations.
 
 Criticism:
@@ -59,18 +62,20 @@ Criticism:
 
 ### Terminology
 
-We distinguish between suspending a blocking.
-`Suspending` means stopping execution of the current context at a statement and returning to the caller, without running the statement continuation.
-`Blocking` means stopping execution of the current context at a statement, waiting for it to complete before continuing.
+We distinguish between suspending and blocking.
+- `Suspending` means stopping execution of the current context at a statement and returning to the caller, without running the statement continuation.
+- `Blocking` means stopping execution of the current context at a statement, waiting for it to complete before continuing.
 
 ### Introduction to resumable functions
 
 Continuations will be used to implement resumable functions.
 Traditional functions have two effects on control flow:
+
 1. On function call, suspend the caller, jump into the function body and run it.
 2. On reaching "return", terminate the callee, resume the caller.
 
 Resumable functions adds the following 2 key capabilities:
+
 3. The callee can suspend itself, returning control to "something".
 4. The current owner (not always the initial caller) of the function can suspend itself and resume the continuation.
 
